@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="محاكاة الحركة">
+    <meta name="theme-color" content="#667eea">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <title>محاكاة حركة الأجسام</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            min-height: 100vh;
+            padding: 20px;
+            direction: rtl;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 25px;
+            font-size: 1.1em;
+        }
+        
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 1200px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .visualization-area {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .canvas-container {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .canvas-container h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+        
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .controls-panel {
+            background: linear-gradient(135deg, #34495e, #2c3e50);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            height: fit-content;
+        }
+
+        .controls-row {
+            display: flex;
+            flex-direction: row-reverse;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .controls-row .control-section {
+            flex: 1 1 150px;
+            margin-bottom: 0;
+        }
+        
+        .control-section {
+            margin-bottom: 20px;
+        }
+
+        .three-col-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .three-col-row .control-section {
+            margin-bottom: 0;
+            min-width: 0;
+        }
+
+        .three-col-row select {
+            max-width: 100%;
+        }
+
+        .three-col-row h3 {
+            font-size: 0.85em;
+        }
+
+        .three-col-row button {
+            padding: 10px 4px;
+            font-size: 0.78em;
+        }
+
+        .three-col-row .control-item {
+            padding: 8px;
+        }
+
+        .three-col-row .control-item label {
+            font-size: 0.75em;
+        }
+
+        .three-col-row .control-item select {
+            font-size: 11px;
+            padding: 6px 4px;
+        }
+        
+        .control-section h3 {
+            color: #ecf0f1;
+            margin-bottom: 12px;
+            font-size: 1em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 6px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .control-item {
+            background: rgba(236, 240, 241, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .control-item label {
+            display: block;
+            font-weight: bold;
+            color: #ecf0f1;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        
+        .control-item select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #3498db;
+            background: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #2c3e50;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 12px 20px;
+            font-size: 15px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+            width: 100%;
+        }
+        
+        button.primary {
+            background: #27ae60;
+            color: white;
+        }
+        
+        button.primary:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+        
+        button.danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        button.danger:hover {
+            background: #c0392b;
+        }
+        
+        button.secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        button.secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .status-panel {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+        
+        .status-panel h3 {
+            margin-bottom: 10px;
+            font-size: 1em;
+            text-align: center;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+            padding-bottom: 8px;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+        
+        .status-item {
+            background: rgba(255,255,255,0.15);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status-item .label {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+        
+        .status-item .value {
+            font-size: 1.4em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .motion-type {
+            background: rgba(255,255,255,0.2);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 10px;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        
+        .motion-type .type-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .motion-type .type-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .motion-type.accelerating {
+            background: rgba(46, 204, 113, 0.3);
+            border-color: #2ecc71;
+        }
+        
+        .motion-type.uniform {
+            background: rgba(52, 152, 219, 0.3);
+            border-color: #3498db;
+        }
+        
+        .motion-type.decelerating {
+            background: rgba(231, 76, 60, 0.3);
+            border-color: #e74c3c;
+        }
+        
+        .info-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            color: #856404;
+            margin-top: 20px;
+        }
+        
+        .info-box h4 {
+            margin-bottom: 8px;
+            color: #856404;
+        }
+        
+        .info-box ul {
+            margin-right: 20px;
+            line-height: 1.8;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>سرعة المتحرك</h1>
+        <p class="subtitle">دراسة تغيرات السرعة - التصوير المتعاقب والمنحنى البياني</p>
+        
+        <div class="main-layout">
+            <div class="visualization-area">
+                <!-- التصوير المتعاقب -->
+                <div class="canvas-container">
+                    <h3>📸 التصوير المتعاقب (Chronophotography)</h3>
+                    <canvas id="chronoCanvas" width="900" height="200"></canvas>
+                </div>
+                
+                <!-- المنحنى البياني -->
+                <div class="canvas-container">
+                    <h3>📊 المنحنى البياني للسرعة v = f(t)</h3>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="color-box" style="background: #2ecc71;"></div>
+                            <span><strong>متسارعة</strong></span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box" style="background: #3498db;"></div>
+                            <span><strong>منتظمة</strong></span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box" style="background: #e74c3c;"></div>
+                            <span><strong>متباطئة</strong></span>
+                        </div>
+                    </div>
+                    <canvas id="graphCanvas" width="900" height="300"></canvas>
+                </div>
+            </div>
+            
+            <!-- لوحة التحكم -->
+            <div class="controls-panel">
+                <div class="three-col-row">
+                    <div class="control-section">
+                        <h3>🎮 التحكم</h3>
+                        <div class="button-group">
+                            <button class="primary" id="startBtn">▶ بدء المحاكاة</button>
+                            <button class="danger" id="pauseBtn">⏸ إيقاف مؤقت</button>
+                            <button class="secondary" id="resetBtn">🔄 إعادة تعيين</button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>🎬 السيناريو</h3>
+                        <div class="control-group">
+                            <div class="control-item">
+                                <label for="scenario">اختر السيناريو:</label>
+                                <select id="scenario">
+                                    <option value="acceleration">حركة متسارعة (انطلاق سيارة)</option>
+                                    <option value="uniform">حركة منتظمة (سرعة ثابتة)</option>
+                                    <option value="deceleration">حركة متباطئة (فرملة)</option>
+                                    <option value="combined" selected>حركة مركبة (انطلاق - ثبات - فرملة)</option>
+                                    <option value="acceleration-deceleration">تسارع ثم تباطؤ</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>⚙️ الإعدادات</h3>
+                        <div class="control-group">
+                            <div class="control-item">
+                                <label for="speed">السرعة:</label>
+                                <select id="speed">
+                                    <option value="0.5">بطيئة (0.5x)</option>
+                                    <option value="1" selected>عادية (1x)</option>
+                                    <option value="1.5">سريعة (1.5x)</option>
+                                    <option value="2">سريعة جداً (2x)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-item">
+                                <label for="photoInterval">فترة التصوير:</label>
+                                <select id="photoInterval">
+                                    <option value="0.2">0.2 ثانية</option>
+                                    <option value="0.3">0.3 ثانية</option>
+                                    <option value="0.5">0.5 ثانية</option>
+                                    <option value="0.7" selected>0.7 ثانية</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <h4>💡 فهم الحركات:</h4>
+            <ul>
+                <li><strong>حركة متسارعة:</strong> السرعة تزداد مع الزمن (منحنى صاعد) - المسافات بين الصور تكبر</li>
+                <li><strong>حركة منتظمة:</strong> السرعة ثابتة (منحنى أفقي) - المسافات بين الصور متساوية</li>
+                <li><strong>حركة متباطئة:</strong> السرعة تنقص مع الزمن (منحنى نازل) - المسافات بين الصور تصغر</li>
+                <li><strong>التصوير المتعاقب:</strong> يُظهر موضع الجسم في أزمنة متساوية، المسافة بين الصور تدل على السرعة</li>
+            </ul>
+        </div>
+    </div>
+
+<script src="script.obf.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

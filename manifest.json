@@ -1,0 +1,26 @@
+{
+  "name": "محاكاة حركة الأجسام - PhysicLabDZ",
+  "short_name": "محاكاة الحركة",
+  "description": "محاكاة تفاعلية لحركة الأجسام (تسارع، حركة منتظمة، تباطؤ) باستخدام التصوير الزمني المتعاقب ورسم بياني حي للسرعة",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#667eea",
+  "theme_color": "#667eea",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
