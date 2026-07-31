@@ -1,6 +1,6 @@
 {
-  "name": "محاكاة حركة الأجسام - PhysicLabDZ",
-  "short_name": "محاكاة الحركة",
+  "name": "سرعة المتحرك - PhysicLabDZ",
+  "short_name": "سرعة المتحرك",
   "description": "محاكاة تفاعلية لحركة الأجسام (تسارع، حركة منتظمة، تباطؤ) باستخدام التصوير الزمني المتعاقب ورسم بياني حي للسرعة",
   "start_url": "./index.html",
   "display": "standalone",

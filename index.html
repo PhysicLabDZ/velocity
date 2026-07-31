@@ -7,10 +7,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="محاكاة الحركة">
+    <meta name="apple-mobile-web-app-title" content="سرعة المتحرك">
     <meta name="theme-color" content="#667eea">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <title>محاكاة حركة الأجسام</title>
+    <title>سرعة المتحرك</title>
     <style>
         * {
             margin: 0;
@@ -357,9 +357,60 @@
             border-radius: 4px;
             border: 2px solid #333;
         }
+        /* شاشة البداية (Splash Screen) */
+        #splashScreen {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            transition: opacity 0.5s ease;
+        }
+        #splashScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #splashScreen img {
+            width: 110px;
+            height: 110px;
+            border-radius: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        #splashScreen h1 {
+            color: #fff;
+            font-size: 26px;
+            font-weight: 700;
+            margin: 0;
+            text-align: center;
+        }
+        #splashScreen .splash-footer {
+            position: absolute;
+            bottom: 34px;
+            color: rgba(255,255,255,0.75);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
     </style>
 </head>
 <body>
+<div id="splashScreen">
+    <img src="icons/icon-192.png" alt="سرعة المتحرك">
+    <h1>سرعة المتحرك</h1>
+    <div class="splash-footer">PhysicLabDZ</div>
+</div>
+<script>
+    setTimeout(function () {
+        var s = document.getElementById('splashScreen');
+        if (s) {
+            s.classList.add('hidden');
+            setTimeout(function () { s.remove(); }, 600);
+        }
+    }, 1600);
+</script>
     <div class="container">
         <h1>سرعة المتحرك</h1>
         <p class="subtitle">دراسة تغيرات السرعة - التصوير المتعاقب والمنحنى البياني</p>
