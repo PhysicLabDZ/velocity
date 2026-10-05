@@ -1,4 +1,4 @@
-const CACHE_NAME = 'motionsim-physiclabdz-v1';
+const CACHE_NAME = 'physiclab-velocity-v4';
 const ASSETS = [
   './',
   './index.html',
