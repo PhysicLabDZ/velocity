@@ -3,14 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="manifest" href="manifest.json">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="سرعة المتحرك">
+    <title>محاكاة حركة الأجسام</title>
     <meta name="theme-color" content="#667eea">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <title>سرعة المتحرك</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <style>
         * {
             margin: 0;
@@ -40,6 +37,12 @@
             color: #2c3e50;
             margin-bottom: 10px;
             font-size: 2em;
+        }
+
+        canvas#chronoCanvas, canvas#graphCanvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
         }
         
         .subtitle {
@@ -357,60 +360,52 @@
             border-radius: 4px;
             border: 2px solid #333;
         }
-        /* شاشة البداية (Splash Screen) */
-        #splashScreen {
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 18px;
-            transition: opacity 0.5s ease;
+        /* تصغير متناسق للنصوص والحشوات على الشاشات الضيقة فقط - لا يؤثر إطلاقاً على شاشات الحاسوب */
+        @media (max-width: 700px) {
+            body { padding: 10px; }
+            .container { padding: 14px; border-radius: 12px; }
+
+            h1 { font-size: 1.3em; }
+            .subtitle { font-size: 0.8em; margin-bottom: 15px; }
+
+            .canvas-container { padding: 10px; }
+            .canvas-container h3 { font-size: 0.95em; margin-bottom: 8px; }
+
+            .legend-item, button[class] { font-size: 0.8em; }
+
+            .controls-panel { padding: 12px; }
+            .three-col-row h3 { font-size: 0.75em; }
+            .three-col-row .control-item label { font-size: 0.68em; }
+            .three-col-row .control-item select { font-size: 10px; padding: 5px 3px; }
+            .three-col-row button { font-size: 0.68em; padding: 8px 3px; }
+
+            .info-box { padding: 10px; font-size: 0.82em; }
+            .info-box h4 { font-size: 0.95em; }
         }
-        #splashScreen.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-        #splashScreen img {
-            width: 110px;
-            height: 110px;
-            border-radius: 24px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-        }
-        #splashScreen h1 {
-            color: #fff;
-            font-size: 26px;
-            font-weight: 700;
-            margin: 0;
-            text-align: center;
-        }
-        #splashScreen .splash-footer {
-            position: absolute;
-            bottom: 34px;
-            color: rgba(255,255,255,0.75);
-            font-size: 14px;
-            letter-spacing: 1px;
+
+        /* وضع سطح المكتب فقط (أكثر من 1200px): لوحة التحكم عمودية، والمنحنى بحجم يناسب ارتفاع الشاشة - لا يؤثر على الهاتف */
+        @media (min-width: 1201px) {
+            .three-col-row {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .three-col-row h3 { font-size: 1em; margin-bottom: 10px; }
+            .three-col-row .button-group { gap: 10px; }
+            .three-col-row button { padding: 10px 16px; font-size: 15px; }
+            .three-col-row .control-item { padding: 10px; }
+            .three-col-row .control-item label { font-size: 0.9em; margin-bottom: 6px; }
+            .three-col-row .control-item select { font-size: 14px; padding: 8px; }
+
+            /* عرض المنحنى يُحسب من ارتفاع الشاشة مع حفظ نسبة الأبعاد 900:480 فلا يتشوه */
+            canvas#graphCanvas {
+                width: min(100%, clamp(450px, calc((100vh - 540px) * 1.875), 900px));
+                height: auto;
+            }
         }
     </style>
 </head>
 <body>
-<div id="splashScreen">
-    <img src="icons/icon-192.png" alt="سرعة المتحرك">
-    <h1>سرعة المتحرك</h1>
-    <div class="splash-footer">PhysicLabDZ</div>
-</div>
-<script>
-    setTimeout(function () {
-        var s = document.getElementById('splashScreen');
-        if (s) {
-            s.classList.add('hidden');
-            setTimeout(function () { s.remove(); }, 600);
-        }
-    }, 1600);
-</script>
     <div class="container">
         <h1>سرعة المتحرك</h1>
         <p class="subtitle">دراسة تغيرات السرعة - التصوير المتعاقب والمنحنى البياني</p>
@@ -426,21 +421,7 @@
                 <!-- المنحنى البياني -->
                 <div class="canvas-container">
                     <h3>📊 المنحنى البياني للسرعة v = f(t)</h3>
-                    <div class="legend">
-                        <div class="legend-item">
-                            <div class="color-box" style="background: #2ecc71;"></div>
-                            <span><strong>متسارعة</strong></span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="color-box" style="background: #3498db;"></div>
-                            <span><strong>منتظمة</strong></span>
-                        </div>
-                        <div class="legend-item">
-                            <div class="color-box" style="background: #e74c3c;"></div>
-                            <span><strong>متباطئة</strong></span>
-                        </div>
-                    </div>
-                    <canvas id="graphCanvas" width="900" height="300"></canvas>
+                    <canvas id="graphCanvas" width="900" height="480"></canvas>
                 </div>
             </div>
             
@@ -488,10 +469,9 @@
                             <div class="control-item">
                                 <label for="photoInterval">فترة التصوير:</label>
                                 <select id="photoInterval">
-                                    <option value="0.2">0.2 ثانية</option>
-                                    <option value="0.3">0.3 ثانية</option>
                                     <option value="0.5">0.5 ثانية</option>
                                     <option value="0.7" selected>0.7 ثانية</option>
+                                    <option value="1">1 ثانية</option>
                                 </select>
                             </div>
                         </div>
@@ -511,13 +491,448 @@
         </div>
     </div>
 
-<script src="script.obf.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  });
-}
-</script>
+    <script>
+        const chronoCanvas = document.getElementById('chronoCanvas');
+        const chronoCtx = chronoCanvas.getContext('2d');
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
+        
+        let running = false;
+        let paused = false;
+        let time = 0;
+        let distance = 0;
+        let velocity = 0;
+        let animationSpeed = 1;
+        let photoInterval = 0.7;
+        let lastPhotoTime = 0;
+        let photos = [];
+        let velocityData = [];
+        let currentScenario = 'combined';
+        
+        // السيناريوهات
+        const scenarios = {
+            acceleration: {
+                name: 'حركة متسارعة',
+                phases: [
+                    { duration: 5, type: 'accelerating', v0: 0, a: 4 }
+                ]
+            },
+            uniform: {
+                name: 'حركة منتظمة',
+                phases: [
+                    { duration: 5, type: 'uniform', v0: 10, a: 0 }
+                ]
+            },
+            deceleration: {
+                name: 'حركة متباطئة',
+                phases: [
+                    { duration: 5, type: 'decelerating', v0: 20, a: -4 }
+                ]
+            },
+            combined: {
+                name: 'حركة مركبة',
+                phases: [
+                    { duration: 3, type: 'accelerating', v0: 0, a: 10/3 },
+                    { duration: 3, type: 'uniform', v0: 10, a: 0 },
+                    { duration: 3, type: 'decelerating', v0: 10, a: -10/3 }
+                ]
+            },
+            'acceleration-deceleration': {
+                name: 'تسارع ثم تباطؤ',
+                phases: [
+                    { duration: 4, type: 'accelerating', v0: 0, a: 4.5 },
+                    { duration: 4, type: 'decelerating', v0: 18, a: -4.5 }
+                ]
+            }
+        };
+        
+        // حساب السرعة والمسافة بناءً على السيناريو
+        function calculateMotion(t) {
+            const scenario = scenarios[currentScenario];
+            let accumulatedTime = 0;
+            let accumulatedDistance = 0;
+            let currentVelocity = 0;
+            
+            for (let phase of scenario.phases) {
+                if (t <= accumulatedTime + phase.duration) {
+                    const phaseTime = t - accumulatedTime;
+                    currentVelocity = phase.v0 + phase.a * phaseTime;
+                    const phaseDistance = phase.v0 * phaseTime + 0.5 * phase.a * phaseTime * phaseTime;
+                    return {
+                        velocity: Math.max(0, currentVelocity),
+                        distance: accumulatedDistance + phaseDistance,
+                        type: phase.type
+                    };
+                }
+                
+                const phaseFinalVelocity = phase.v0 + phase.a * phase.duration;
+                const phaseDistance = phase.v0 * phase.duration + 0.5 * phase.a * phase.duration * phase.duration;
+                accumulatedDistance += phaseDistance;
+                accumulatedTime += phase.duration;
+            }
+            
+            // انتهى السيناريو
+            return {
+                velocity: 0,
+                distance: accumulatedDistance,
+                type: 'stopped'
+            };
+        }
+        
+        // رسم التصوير المتعاقب
+        function drawChronophotography() {
+            chronoCtx.clearRect(0, 0, chronoCanvas.width, chronoCanvas.height);
+            
+            // الأرضية
+            chronoCtx.fillStyle = '#95a5a6';
+            chronoCtx.fillRect(0, chronoCanvas.height - 30, chronoCanvas.width, 30);
+            
+            // خط الأرضية
+            chronoCtx.strokeStyle = '#7f8c8d';
+            chronoCtx.lineWidth = 2;
+            chronoCtx.beginPath();
+            chronoCtx.moveTo(0, chronoCanvas.height - 30);
+            chronoCtx.lineTo(chronoCanvas.width, chronoCanvas.height - 30);
+            chronoCtx.stroke();
+            
+            // علامات المسافة
+            chronoCtx.fillStyle = '#34495e';
+            chronoCtx.font = '12px Arial';
+            for (let i = 0; i <= 11; i++) {
+                const x = i * 80; // 8px لكل متر: كل 10m = 80px
+                chronoCtx.textAlign = (i === 0) ? 'left' : 'center';
+                chronoCtx.fillText(`${i * 10}m`, x, chronoCanvas.height - 35);
+            }
+            
+            // رسم كل الصور المتعاقبة الملتقطة فعلياً (بلا إخفاء أي موضع)
+            let prevPhotoX = null;
+            photos.forEach((photo, index) => {
+                const alpha = 0.3 + (index / photos.length) * 0.7;
+                drawCar(photo.x, chronoCanvas.height - 80, photo.velocity, alpha);
+
+                if (photo.velocity > 0) {
+                    chronoCtx.globalAlpha = alpha;
+                    drawVelocityArrow(photo.x + 11, chronoCanvas.height - 96, photo.velocity, '#e74c3c', 2, 8, 5);
+                    chronoCtx.globalAlpha = 1;
+                }
+
+                // قيمة المسافة الفعلية بين هذه الصورة والصورة السابقة (فقط عند وجود مساحة كافية لقراءتها)
+                if (prevPhotoX !== null) {
+                    const gapPx = photo.x - prevPhotoX;
+                    const gapMeters = gapPx / 8;
+                    if (gapPx >= 20) {
+                        chronoCtx.globalAlpha = Math.max(alpha, 0.55);
+                        chronoCtx.fillStyle = '#2c3e50';
+                        chronoCtx.font = 'bold 10px Arial';
+                        chronoCtx.textAlign = 'center';
+                        chronoCtx.fillText(gapMeters.toFixed(1)+'m', prevPhotoX + gapPx/2, chronoCanvas.height - 108);
+                        chronoCtx.globalAlpha = 1;
+                    }
+                }
+                prevPhotoX = photo.x;
+            });
+            
+            // رسم السيارة الحالية
+            if (running || paused || time > 0) {
+                const x = Math.min(distance * 8, chronoCanvas.width - 50);
+                drawCar(x, chronoCanvas.height - 80, velocity, 1);
+
+                // سهم السرعة الحالي
+                if (velocity > 0) {
+                    const tipX = drawVelocityArrow(x + 11, chronoCanvas.height - 96, velocity, '#27ae60', 3, 10, 7);
+
+                    // تسمية السرعة (تبقى داخل حدود الكانفاس)
+                    const label = `v = ${velocity.toFixed(1)} m/s`;
+                    chronoCtx.fillStyle = '#27ae60';
+                    chronoCtx.font = 'bold 14px Arial';
+                    chronoCtx.textAlign = 'left';
+                    const labelW = chronoCtx.measureText(label).width;
+                    const labelX = Math.min(tipX + 6, chronoCanvas.width - labelW - 4);
+                    chronoCtx.fillText(label, labelX, chronoCanvas.height - 91);
+                }
+            }
+        }
+
+        // سهم السرعة: مقياس موحد 2px لكل m/s، يبدأ من مركز السيارة ولا يتجاوز حافة الكانفاس
+        function drawVelocityArrow(x0, y, v, color, lineW, headLen, headHalf) {
+            const tipX = Math.min(x0 + v * 2, chronoCanvas.width - 4);
+            chronoCtx.strokeStyle = color;
+            chronoCtx.lineWidth = lineW;
+            chronoCtx.beginPath();
+            chronoCtx.moveTo(x0, y);
+            chronoCtx.lineTo(tipX, y);
+            chronoCtx.stroke();
+
+            chronoCtx.fillStyle = color;
+            chronoCtx.beginPath();
+            chronoCtx.moveTo(tipX, y);
+            chronoCtx.lineTo(tipX - headLen, y - headHalf);
+            chronoCtx.lineTo(tipX - headLen, y + headHalf);
+            chronoCtx.closePath();
+            chronoCtx.fill();
+            return tipX;
+        }
+        
+        // رسم السيارة
+        function drawCar(x, y, velocity, alpha) {
+            chronoCtx.globalAlpha = alpha;
+            
+            // جسم السيارة (مصغّر لتقليل التداخل عند تقارب المواضع)
+            chronoCtx.fillStyle = '#3498db';
+            chronoCtx.fillRect(x, y, 22, 11);
+            
+            // سقف السيارة
+            chronoCtx.fillStyle = '#2980b9';
+            chronoCtx.fillRect(x + 5, y - 6, 11, 6);
+            
+            // العجلات
+            chronoCtx.fillStyle = '#2c3e50';
+            chronoCtx.beginPath();
+            chronoCtx.arc(x + 5, y + 11, 3, 0, Math.PI * 2);
+            chronoCtx.fill();
+            chronoCtx.beginPath();
+            chronoCtx.arc(x + 17, y + 11, 3, 0, Math.PI * 2);
+            chronoCtx.fill();
+            
+            chronoCtx.globalAlpha = 1;
+        }
+        
+        // رسم المنحنى البياني
+        function drawGraph() {
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            // الشبكة
+            graphCtx.strokeStyle = '#e0e0e0';
+            graphCtx.lineWidth = 1;
+            
+            // خطوط أفقية (السرعة)
+            for (let i = 0; i <= 10; i++) {
+                const y = graphCanvas.height - 40 - (i * (graphCanvas.height - 60) / 10);
+                graphCtx.beginPath();
+                graphCtx.moveTo(60, y);
+                graphCtx.lineTo(graphCanvas.width - 20, y);
+                graphCtx.stroke();
+                
+                // تسميات السرعة
+                graphCtx.fillStyle = '#34495e';
+                graphCtx.font = '12px Arial';
+                graphCtx.textAlign = 'right';
+                graphCtx.fillText(`${i * 2}`, 50, y + 4);
+            }
+            
+            // خطوط عمودية (الزمن)
+            for (let i = 0; i <= 10; i++) {
+                const x = 60 + (i * (graphCanvas.width - 80) / 10);
+                graphCtx.beginPath();
+                graphCtx.moveTo(x, 20);
+                graphCtx.lineTo(x, graphCanvas.height - 40);
+                graphCtx.stroke();
+                
+                // تسميات الزمن
+                graphCtx.fillStyle = '#34495e';
+                graphCtx.font = '12px Arial';
+                graphCtx.textAlign = 'center';
+                graphCtx.fillText(`${i}s`, x, graphCanvas.height - 20);
+            }
+            
+            // المحاور
+            graphCtx.strokeStyle = '#2c3e50';
+            graphCtx.lineWidth = 2;
+            
+            // المحور العمودي
+            graphCtx.beginPath();
+            graphCtx.moveTo(60, 20);
+            graphCtx.lineTo(60, graphCanvas.height - 40);
+            graphCtx.stroke();
+            
+            // المحور الأفقي
+            graphCtx.beginPath();
+            graphCtx.moveTo(60, graphCanvas.height - 40);
+            graphCtx.lineTo(graphCanvas.width - 20, graphCanvas.height - 40);
+            graphCtx.stroke();
+            
+            // تسميات المحاور
+            graphCtx.fillStyle = '#2c3e50';
+            graphCtx.font = 'bold 14px Arial';
+            graphCtx.textAlign = 'center';
+            graphCtx.fillText('الزمن (s)', graphCanvas.width / 2, graphCanvas.height - 5);
+            
+            graphCtx.save();
+            graphCtx.translate(15, graphCanvas.height / 2);
+            graphCtx.rotate(-Math.PI / 2);
+            graphCtx.fillText('السرعة (m/s)', 0, 0);
+            graphCtx.restore();
+            
+            // رسم المنحنى
+            if (velocityData.length > 1) {
+                const scenario = scenarios[currentScenario];
+                let accumulatedTime = 0;
+                
+                // رسم كل مرحلة بلون مختلف
+                for (let phaseIndex = 0; phaseIndex < scenario.phases.length; phaseIndex++) {
+                    const phase = scenario.phases[phaseIndex];
+                    const phaseStartTime = accumulatedTime;
+                    const phaseEndTime = accumulatedTime + phase.duration;
+                    
+                    // تحديد اللون حسب نوع الحركة
+                    let color;
+                    if (phase.type === 'accelerating') {
+                        color = '#2ecc71';
+                    } else if (phase.type === 'uniform') {
+                        color = '#3498db';
+                    } else {
+                        color = '#e74c3c';
+                    }
+                    
+                    graphCtx.strokeStyle = color;
+                    graphCtx.lineWidth = 3;
+                    graphCtx.beginPath();
+                    
+                    let firstPoint = true;
+                    for (let i = 0; i < velocityData.length; i++) {
+                        const dataPoint = velocityData[i];
+                        if (dataPoint.time >= phaseStartTime && dataPoint.time <= phaseEndTime) {
+                            const x = 60 + (dataPoint.time / 10) * (graphCanvas.width - 80);
+                            const y = graphCanvas.height - 40 - (dataPoint.velocity / 20) * (graphCanvas.height - 60);
+                            
+                            if (firstPoint) {
+                                graphCtx.moveTo(x, y);
+                                firstPoint = false;
+                            } else {
+                                graphCtx.lineTo(x, y);
+                            }
+                        }
+                    }
+                    
+                    graphCtx.stroke();
+                    
+                    accumulatedTime += phase.duration;
+                }
+                
+                // رسم النقطة الحالية
+                if (velocityData.length > 0) {
+                    const lastPoint = velocityData[velocityData.length - 1];
+                    const x = 60 + (lastPoint.time / 10) * (graphCanvas.width - 80);
+                    const y = graphCanvas.height - 40 - (lastPoint.velocity / 20) * (graphCanvas.height - 60);
+                    
+                    graphCtx.fillStyle = '#e74c3c';
+                    graphCtx.beginPath();
+                    graphCtx.arc(x, y, 5, 0, Math.PI * 2);
+                    graphCtx.fill();
+                }
+            }
+        }
+        
+        // تحديث الواجهة (لوحة الحالة أُلغيت بناءً على الطلب)
+        function updateUI() {
+            // لا شيء - تم إلغاء لوحة الحالة الحية
+        }
+        
+        // حلقة الرسم
+        function getTotalDuration() {
+            return scenarios[currentScenario].phases.reduce((sum, p) => sum + p.duration, 0);
+        }
+
+        let lastFrameTs = null;
+
+        function animate(ts) {
+            // الزمن الحقيقي بين إطارين (مستقل عن معدل تحديث الشاشة)
+            let dt = 0;
+            if (lastFrameTs !== null && ts !== undefined) {
+                dt = Math.max(0, Math.min((ts - lastFrameTs) / 1000, 0.1));
+            }
+            if (ts !== undefined) lastFrameTs = ts;
+
+            if (running && !paused) {
+                const totalDuration = getTotalDuration();
+                time = Math.min(time + dt * animationSpeed, totalDuration);
+
+                const motion = calculateMotion(time);
+                velocity = motion.velocity;
+                distance = motion.distance;
+
+                // حفظ بيانات السرعة
+                velocityData.push({ time: time, velocity: velocity });
+
+                // التقاط الصور عند مضاعفات فترة التصوير بالضبط
+                while (lastPhotoTime + photoInterval <= time + 1e-9) {
+                    lastPhotoTime += photoInterval;
+                    const pm = calculateMotion(lastPhotoTime);
+                    const px = Math.min(pm.distance * 8, chronoCanvas.width - 50);
+                    photos.push({ x: px, velocity: pm.velocity });
+                }
+
+                // إيقاف عند نهاية السيناريو (تبقى السرعة والموضع النهائيان)
+                if (time >= totalDuration) {
+                    running = false;
+                }
+            }
+
+            drawChronophotography();
+            drawGraph();
+            updateUI();
+
+            requestAnimationFrame(animate);
+        }
+        
+        // معالجات الأحداث
+        // إعادة التعيين الكاملة (تُستعمل عند الضغط على الزر وعند تغيير السيناريو)
+        function resetSimulation() {
+            running = false;
+            paused = false;
+            time = 0;
+            distance = 0;
+            velocity = 0;
+            lastPhotoTime = 0;
+            photos = [];
+            velocityData = [];
+            updateUI();
+        }
+
+        document.getElementById('scenario').addEventListener('change', (e) => {
+            currentScenario = e.target.value;
+            resetSimulation();
+        });
+        
+        document.getElementById('speed').addEventListener('change', (e) => {
+            animationSpeed = parseFloat(e.target.value);
+        });
+        
+        document.getElementById('photoInterval').addEventListener('change', (e) => {
+            photoInterval = parseFloat(e.target.value);
+            resetSimulation();
+        });
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            // بعد انتهاء الحركة: البدء من جديد
+            if (time >= getTotalDuration()) {
+                resetSimulation();
+            }
+            // صورة عند الزمن t = 0 (موضع الانطلاق)
+            if (time === 0 && photos.length === 0) {
+                const m0 = calculateMotion(0);
+                photos.push({ x: m0.distance * 8, velocity: m0.velocity });
+            }
+            running = true;
+            paused = false;
+        });
+        
+        document.getElementById('pauseBtn').addEventListener('click', () => {
+            paused = !paused;
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+        
+        // بدء التطبيق
+        requestAnimationFrame(animate);
+    </script>
+    <script>
+        // تسجيل عامل الخدمة (يتيح التثبيت والعمل دون اتصال)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+            });
+        }
+    </script>
 </body>
 </html>
