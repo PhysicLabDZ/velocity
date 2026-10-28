@@ -383,6 +383,88 @@
             .info-box h4 { font-size: 0.95em; }
         }
 
+        button.info {
+            background: #3498db;
+            color: white;
+        }
+
+        button.info:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+
+        /* نافذة الحفظ */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 1000;
+        }
+
+        .modal-overlay[hidden] { display: none; }
+
+        .modal {
+            background: white;
+            border-radius: 14px;
+            padding: 20px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.35);
+            direction: rtl;
+        }
+
+        .modal h3 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 1.15em;
+        }
+
+        .modal label {
+            display: block;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 14px 0 6px;
+            font-size: 0.95em;
+        }
+
+        .modal select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: 2px solid #3498db;
+            background: white;
+            font-size: 14px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .modal-note {
+            min-height: 1.4em;
+            margin-top: 12px;
+            font-size: 0.9em;
+            line-height: 1.5;
+            color: #7f8c8d;
+        }
+
+        .modal-note.ok { color: #1e8449; }
+        .modal-note.error { color: #c0392b; }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .modal-actions button {
+            font-size: 15px;
+            padding: 12px 10px;
+        }
+
         /* وضع سطح المكتب فقط (أكثر من 1200px): لوحة التحكم عمودية، والمنحنى بحجم يناسب ارتفاع الشاشة - لا يؤثر على الهاتف */
         @media (min-width: 1201px) {
             .three-col-row {
@@ -393,6 +475,13 @@
             .three-col-row h3 { font-size: 1em; margin-bottom: 10px; }
             .three-col-row .button-group { gap: 10px; }
             .three-col-row button { padding: 10px 16px; font-size: 15px; }
+            /* أزرار التحكم الأربعة في شبكة 2×2 حتى لا يطول الجانب بسبب زر الحفظ */
+            .three-col-row .button-group {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+            .three-col-row .button-group button { padding: 10px 6px; font-size: 14px; }
             .three-col-row .control-item { padding: 10px; }
             .three-col-row .control-item label { font-size: 0.9em; margin-bottom: 6px; }
             .three-col-row .control-item select { font-size: 14px; padding: 8px; }
@@ -415,7 +504,7 @@
                 <!-- التصوير المتعاقب -->
                 <div class="canvas-container">
                     <h3>📸 التصوير المتعاقب (Chronophotography)</h3>
-                    <canvas id="chronoCanvas" width="900" height="200"></canvas>
+                    <canvas id="chronoCanvas" width="900" height="150"></canvas>
                 </div>
                 
                 <!-- المنحنى البياني -->
@@ -434,6 +523,7 @@
                             <button class="primary" id="startBtn">▶ بدء المحاكاة</button>
                             <button class="danger" id="pauseBtn">⏸ إيقاف مؤقت</button>
                             <button class="secondary" id="resetBtn">🔄 إعادة تعيين</button>
+                            <button class="info" id="saveBtn">💾 حفظ كصورة</button>
                         </div>
                     </div>
 
@@ -488,6 +578,33 @@
                 <li><strong>حركة متباطئة:</strong> السرعة تنقص مع الزمن (منحنى نازل) - المسافات بين الصور تصغر</li>
                 <li><strong>التصوير المتعاقب:</strong> يُظهر موضع الجسم في أزمنة متساوية، المسافة بين الصور تدل على السرعة</li>
             </ul>
+        </div>
+    </div>
+
+    <!-- نافذة حفظ الصور -->
+    <div id="saveOverlay" class="modal-overlay" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="saveTitle">
+            <h3 id="saveTitle">💾 حفظ كصورة PNG</h3>
+
+            <label for="saveWhat">ما الذي تريد حفظه؟</label>
+            <select id="saveWhat">
+                <option value="graph">المنحنى البياني مع جدول القيم</option>
+                <option value="positions">المواضع المتتالية (التصوير المتعاقب)</option>
+            </select>
+
+            <label for="saveCopies">عدد النسخ:</label>
+            <select id="saveCopies">
+                <option value="1">نسخة واحدة</option>
+                <option value="9">9 نسخ في صفحة A4</option>
+                <option value="max">أقصى عدد ممكن في صفحة A4</option>
+            </select>
+
+            <p id="saveNote" class="modal-note"></p>
+
+            <div class="modal-actions">
+                <button class="primary" id="saveGo">💾 حفظ</button>
+                <button class="secondary" id="saveCancel">إغلاق</button>
+            </div>
         </div>
     </div>
 
@@ -580,40 +697,42 @@
         }
         
         // رسم التصوير المتعاقب
-        function drawChronophotography() {
-            chronoCtx.clearRect(0, 0, chronoCanvas.width, chronoCanvas.height);
+        // الوسائط الاختيارية (ctx, W, H, opts) تُستعمل عند التصدير للرسم على كانفاس آخر
+        function drawChronophotography(ctx = chronoCtx, W = chronoCanvas.width, H = chronoCanvas.height, opts = {}) {
+            if (!opts.noClear) ctx.clearRect(0, 0, W, H);
             
             // الأرضية
-            chronoCtx.fillStyle = '#95a5a6';
-            chronoCtx.fillRect(0, chronoCanvas.height - 30, chronoCanvas.width, 30);
+            ctx.fillStyle = '#95a5a6';
+            ctx.fillRect(0, H - 30, W, 30);
             
             // خط الأرضية
-            chronoCtx.strokeStyle = '#7f8c8d';
-            chronoCtx.lineWidth = 2;
-            chronoCtx.beginPath();
-            chronoCtx.moveTo(0, chronoCanvas.height - 30);
-            chronoCtx.lineTo(chronoCanvas.width, chronoCanvas.height - 30);
-            chronoCtx.stroke();
+            ctx.strokeStyle = '#7f8c8d';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, H - 30);
+            ctx.lineTo(W, H - 30);
+            ctx.stroke();
             
             // علامات المسافة
-            chronoCtx.fillStyle = '#34495e';
-            chronoCtx.font = '12px Arial';
+            ctx.fillStyle = '#34495e';
+            ctx.font = '12px Arial';
             for (let i = 0; i <= 11; i++) {
                 const x = i * 80; // 8px لكل متر: كل 10m = 80px
-                chronoCtx.textAlign = (i === 0) ? 'left' : 'center';
-                chronoCtx.fillText(`${i * 10}m`, x, chronoCanvas.height - 35);
+                if (i > 0 && x + 18 > W) break;
+                ctx.textAlign = (i === 0) ? 'left' : 'center';
+                ctx.fillText(`${i * 10}m`, x, H - 35);
             }
             
             // رسم كل الصور المتعاقبة الملتقطة فعلياً (بلا إخفاء أي موضع)
             let prevPhotoX = null;
             photos.forEach((photo, index) => {
                 const alpha = 0.3 + (index / photos.length) * 0.7;
-                drawCar(photo.x, chronoCanvas.height - 80, photo.velocity, alpha);
+                drawCar(ctx, photo.x, H - 80, photo.velocity, alpha);
 
                 if (photo.velocity > 0) {
-                    chronoCtx.globalAlpha = alpha;
-                    drawVelocityArrow(photo.x + 11, chronoCanvas.height - 96, photo.velocity, '#e74c3c', 2, 8, 5);
-                    chronoCtx.globalAlpha = 1;
+                    ctx.globalAlpha = alpha;
+                    drawVelocityArrow(ctx, W, photo.x + 11, H - 96, photo.velocity, '#e74c3c', 2, 8, 5);
+                    ctx.globalAlpha = 1;
                 }
 
                 // قيمة المسافة الفعلية بين هذه الصورة والصورة السابقة (فقط عند وجود مساحة كافية لقراءتها)
@@ -621,147 +740,155 @@
                     const gapPx = photo.x - prevPhotoX;
                     const gapMeters = gapPx / 8;
                     if (gapPx >= 20) {
-                        chronoCtx.globalAlpha = Math.max(alpha, 0.55);
-                        chronoCtx.fillStyle = '#2c3e50';
-                        chronoCtx.font = 'bold 10px Arial';
-                        chronoCtx.textAlign = 'center';
-                        chronoCtx.fillText(gapMeters.toFixed(1)+'m', prevPhotoX + gapPx/2, chronoCanvas.height - 108);
-                        chronoCtx.globalAlpha = 1;
+                        ctx.globalAlpha = Math.max(alpha, 0.55);
+                        ctx.fillStyle = '#2c3e50';
+                        ctx.font = 'bold 10px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(gapMeters.toFixed(1)+'m', prevPhotoX + gapPx/2, H - 108);
+                        ctx.globalAlpha = 1;
                     }
                 }
                 prevPhotoX = photo.x;
             });
             
-            // رسم السيارة الحالية
-            if (running || paused || time > 0) {
-                const x = Math.min(distance * 8, chronoCanvas.width - 50);
-                drawCar(x, chronoCanvas.height - 80, velocity, 1);
+            // رسم السيارة الحالية (لا تُرسم في الصور المحفوظة)
+            if (!opts.photosOnly && (running || paused || time > 0)) {
+                const x = Math.min(distance * 8, W - 50);
+                drawCar(ctx, x, H - 80, velocity, 1);
 
                 // سهم السرعة الحالي
                 if (velocity > 0) {
-                    const tipX = drawVelocityArrow(x + 11, chronoCanvas.height - 96, velocity, '#27ae60', 3, 10, 7);
+                    const tipX = drawVelocityArrow(ctx, W, x + 11, H - 96, velocity, '#27ae60', 3, 10, 7);
 
                     // تسمية السرعة (تبقى داخل حدود الكانفاس)
                     const label = `v = ${velocity.toFixed(1)} m/s`;
-                    chronoCtx.fillStyle = '#27ae60';
-                    chronoCtx.font = 'bold 14px Arial';
-                    chronoCtx.textAlign = 'left';
-                    const labelW = chronoCtx.measureText(label).width;
-                    const labelX = Math.min(tipX + 6, chronoCanvas.width - labelW - 4);
-                    chronoCtx.fillText(label, labelX, chronoCanvas.height - 91);
+                    ctx.fillStyle = '#27ae60';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.textAlign = 'left';
+                    const labelW = ctx.measureText(label).width;
+                    const labelX = Math.min(tipX + 6, W - labelW - 4);
+                    ctx.fillText(label, labelX, H - 91);
                 }
             }
         }
 
         // سهم السرعة: مقياس موحد 2px لكل m/s، يبدأ من مركز السيارة ولا يتجاوز حافة الكانفاس
-        function drawVelocityArrow(x0, y, v, color, lineW, headLen, headHalf) {
-            const tipX = Math.min(x0 + v * 2, chronoCanvas.width - 4);
-            chronoCtx.strokeStyle = color;
-            chronoCtx.lineWidth = lineW;
-            chronoCtx.beginPath();
-            chronoCtx.moveTo(x0, y);
-            chronoCtx.lineTo(tipX, y);
-            chronoCtx.stroke();
+        // رأس السهم يصغر مع قصر الخط فلا يظهر رأساً فقط عند السرعات الصغيرة
+        function drawVelocityArrow(ctx, W, x0, y, v, color, lineW, headLen, headHalf) {
+            const tipX = Math.min(x0 + v * 2, W - 4);
+            const len = tipX - x0;
+            if (len < 1.5) return tipX;
 
-            chronoCtx.fillStyle = color;
-            chronoCtx.beginPath();
-            chronoCtx.moveTo(tipX, y);
-            chronoCtx.lineTo(tipX - headLen, y - headHalf);
-            chronoCtx.lineTo(tipX - headLen, y + headHalf);
-            chronoCtx.closePath();
-            chronoCtx.fill();
+            const hl = Math.min(headLen, len);
+            const hh = headHalf * (hl / headLen);
+
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineW;
+            ctx.beginPath();
+            ctx.moveTo(x0, y);
+            ctx.lineTo(tipX - hl * 0.5, y);
+            ctx.stroke();
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(tipX, y);
+            ctx.lineTo(tipX - hl, y - hh);
+            ctx.lineTo(tipX - hl, y + hh);
+            ctx.closePath();
+            ctx.fill();
             return tipX;
         }
         
         // رسم السيارة
-        function drawCar(x, y, velocity, alpha) {
-            chronoCtx.globalAlpha = alpha;
+        function drawCar(ctx, x, y, velocity, alpha) {
+            ctx.globalAlpha = alpha;
             
             // جسم السيارة (مصغّر لتقليل التداخل عند تقارب المواضع)
-            chronoCtx.fillStyle = '#3498db';
-            chronoCtx.fillRect(x, y, 22, 11);
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(x, y, 22, 11);
             
             // سقف السيارة
-            chronoCtx.fillStyle = '#2980b9';
-            chronoCtx.fillRect(x + 5, y - 6, 11, 6);
+            ctx.fillStyle = '#2980b9';
+            ctx.fillRect(x + 5, y - 6, 11, 6);
             
             // العجلات
-            chronoCtx.fillStyle = '#2c3e50';
-            chronoCtx.beginPath();
-            chronoCtx.arc(x + 5, y + 11, 3, 0, Math.PI * 2);
-            chronoCtx.fill();
-            chronoCtx.beginPath();
-            chronoCtx.arc(x + 17, y + 11, 3, 0, Math.PI * 2);
-            chronoCtx.fill();
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(x + 5, y + 11, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + 17, y + 11, 3, 0, Math.PI * 2);
+            ctx.fill();
             
-            chronoCtx.globalAlpha = 1;
+            ctx.globalAlpha = 1;
         }
         
         // رسم المنحنى البياني
-        function drawGraph() {
-            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+        // الوسائط الاختيارية (ctx, W, H, opts) تُستعمل عند التصدير للرسم على كانفاس آخر
+        function drawGraph(ctx = graphCtx, W = graphCanvas.width, H = graphCanvas.height, opts = {}) {
+            if (!opts.noClear) ctx.clearRect(0, 0, W, H);
             
             // الشبكة
-            graphCtx.strokeStyle = '#e0e0e0';
-            graphCtx.lineWidth = 1;
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
             
             // خطوط أفقية (السرعة)
             for (let i = 0; i <= 10; i++) {
-                const y = graphCanvas.height - 40 - (i * (graphCanvas.height - 60) / 10);
-                graphCtx.beginPath();
-                graphCtx.moveTo(60, y);
-                graphCtx.lineTo(graphCanvas.width - 20, y);
-                graphCtx.stroke();
+                const y = H - 40 - (i * (H - 60) / 10);
+                ctx.beginPath();
+                ctx.moveTo(60, y);
+                ctx.lineTo(W - 20, y);
+                ctx.stroke();
                 
                 // تسميات السرعة
-                graphCtx.fillStyle = '#34495e';
-                graphCtx.font = '12px Arial';
-                graphCtx.textAlign = 'right';
-                graphCtx.fillText(`${i * 2}`, 50, y + 4);
+                ctx.fillStyle = '#34495e';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${i * 2}`, 50, y + 4);
             }
             
             // خطوط عمودية (الزمن)
             for (let i = 0; i <= 10; i++) {
-                const x = 60 + (i * (graphCanvas.width - 80) / 10);
-                graphCtx.beginPath();
-                graphCtx.moveTo(x, 20);
-                graphCtx.lineTo(x, graphCanvas.height - 40);
-                graphCtx.stroke();
+                const x = 60 + (i * (W - 80) / 10);
+                ctx.beginPath();
+                ctx.moveTo(x, 20);
+                ctx.lineTo(x, H - 40);
+                ctx.stroke();
                 
                 // تسميات الزمن
-                graphCtx.fillStyle = '#34495e';
-                graphCtx.font = '12px Arial';
-                graphCtx.textAlign = 'center';
-                graphCtx.fillText(`${i}s`, x, graphCanvas.height - 20);
+                ctx.fillStyle = '#34495e';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${i}s`, x, H - 20);
             }
             
             // المحاور
-            graphCtx.strokeStyle = '#2c3e50';
-            graphCtx.lineWidth = 2;
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 2;
             
             // المحور العمودي
-            graphCtx.beginPath();
-            graphCtx.moveTo(60, 20);
-            graphCtx.lineTo(60, graphCanvas.height - 40);
-            graphCtx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(60, 20);
+            ctx.lineTo(60, H - 40);
+            ctx.stroke();
             
             // المحور الأفقي
-            graphCtx.beginPath();
-            graphCtx.moveTo(60, graphCanvas.height - 40);
-            graphCtx.lineTo(graphCanvas.width - 20, graphCanvas.height - 40);
-            graphCtx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(60, H - 40);
+            ctx.lineTo(W - 20, H - 40);
+            ctx.stroke();
             
             // تسميات المحاور
-            graphCtx.fillStyle = '#2c3e50';
-            graphCtx.font = 'bold 14px Arial';
-            graphCtx.textAlign = 'center';
-            graphCtx.fillText('الزمن (s)', graphCanvas.width / 2, graphCanvas.height - 5);
+            ctx.fillStyle = '#2c3e50';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('الزمن (s)', W / 2, H - 5);
             
-            graphCtx.save();
-            graphCtx.translate(15, graphCanvas.height / 2);
-            graphCtx.rotate(-Math.PI / 2);
-            graphCtx.fillText('السرعة (m/s)', 0, 0);
-            graphCtx.restore();
+            ctx.save();
+            ctx.translate(15, H / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('السرعة (m/s)', 0, 0);
+            ctx.restore();
             
             // رسم المنحنى
             if (velocityData.length > 1) {
@@ -784,41 +911,41 @@
                         color = '#e74c3c';
                     }
                     
-                    graphCtx.strokeStyle = color;
-                    graphCtx.lineWidth = 3;
-                    graphCtx.beginPath();
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
                     
                     let firstPoint = true;
                     for (let i = 0; i < velocityData.length; i++) {
                         const dataPoint = velocityData[i];
                         if (dataPoint.time >= phaseStartTime && dataPoint.time <= phaseEndTime) {
-                            const x = 60 + (dataPoint.time / 10) * (graphCanvas.width - 80);
-                            const y = graphCanvas.height - 40 - (dataPoint.velocity / 20) * (graphCanvas.height - 60);
+                            const x = 60 + (dataPoint.time / 10) * (W - 80);
+                            const y = H - 40 - (dataPoint.velocity / 20) * (H - 60);
                             
                             if (firstPoint) {
-                                graphCtx.moveTo(x, y);
+                                ctx.moveTo(x, y);
                                 firstPoint = false;
                             } else {
-                                graphCtx.lineTo(x, y);
+                                ctx.lineTo(x, y);
                             }
                         }
                     }
                     
-                    graphCtx.stroke();
+                    ctx.stroke();
                     
                     accumulatedTime += phase.duration;
                 }
                 
-                // رسم النقطة الحالية
-                if (velocityData.length > 0) {
+                // رسم النقطة الحالية (لا تُرسم في الصور المحفوظة)
+                if (!opts.noMarker && velocityData.length > 0) {
                     const lastPoint = velocityData[velocityData.length - 1];
-                    const x = 60 + (lastPoint.time / 10) * (graphCanvas.width - 80);
-                    const y = graphCanvas.height - 40 - (lastPoint.velocity / 20) * (graphCanvas.height - 60);
+                    const x = 60 + (lastPoint.time / 10) * (W - 80);
+                    const y = H - 40 - (lastPoint.velocity / 20) * (H - 60);
                     
-                    graphCtx.fillStyle = '#e74c3c';
-                    graphCtx.beginPath();
-                    graphCtx.arc(x, y, 5, 0, Math.PI * 2);
-                    graphCtx.fill();
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
         }
@@ -875,6 +1002,158 @@
             requestAnimationFrame(animate);
         }
         
+        // ===== حفظ كصورة PNG =====
+        // الصورة تُرسم من الحالة الحالية (ما التُقط من صور حتى هذه اللحظة)
+        const EXPORT_SCALE = 3;
+        const A4 = { w: 2480, h: 3508, margin: 118, gap: 47 }; // صفحة A4 عمودية بدقة 300dpi، هوامش 10mm، فاصل 4mm
+        const MAX_MODE_MIN_WIDTH = 1063;                        // أصغر عرض للنسخة الواحدة في وضع "أقصى عدد" (≈ 90mm)
+
+        function fmtNum(n, d) { return String(parseFloat(n.toFixed(d))); }
+
+        function newExportCanvas(w, h, scale) {
+            const c = document.createElement('canvas');
+            c.width = Math.round(w * scale);
+            c.height = Math.round(h * scale);
+            const ctx = c.getContext('2d');
+            ctx.scale(scale, scale);
+            ctx.direction = 'rtl';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            return { c, ctx };
+        }
+
+        // المنحنى البياني v = f(t) + جدول أفقي (الزمن / السرعة) عند لحظات التصوير
+        function renderGraphBlock(scale) {
+            const W = 720, GH = 400, rowH = 30, gap = 12, pad = 10;
+            const H = GH + gap + rowH * 2 + pad;
+            const { c, ctx } = newExportCanvas(W, H, scale);
+
+            drawGraph(ctx, W, GH, { noClear: true, noMarker: true });
+
+            const n = photos.length;
+            const labelW = 104, x0 = 10, y0 = GH + gap;
+            const colW = (W - 20 - labelW) / n;
+            const vf = colW < 34 ? 12 : 13;
+            const rows = [
+                { label: 'الزمن t (s)', vals: photos.map((p, i) => fmtNum(i * photoInterval, 2)) },
+                { label: 'السرعة v (m/s)', vals: photos.map(p => fmtNum(p.velocity, 1)) }
+            ];
+
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#34495e';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'center';
+            rows.forEach((row, r) => {
+                const y = y0 + r * rowH;
+                ctx.fillStyle = '#ecf0f1';
+                ctx.fillRect(x0, y, labelW, rowH);
+                ctx.strokeRect(x0, y, labelW, rowH);
+                ctx.fillStyle = '#2c3e50';
+                ctx.font = 'bold 13px Arial';
+                ctx.fillText(row.label, x0 + labelW / 2, y + rowH / 2 + 1);
+
+                row.vals.forEach((v, i) => {
+                    const x = x0 + labelW + i * colW;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(x, y, colW, rowH);
+                    ctx.strokeRect(x, y, colW, rowH);
+                    ctx.fillStyle = '#2c3e50';
+                    ctx.font = `bold ${vf}px Arial`;
+                    ctx.fillText(v, x + colW / 2, y + rowH / 2 + 1);
+                });
+            });
+            ctx.textBaseline = 'alphabetic';
+            return c;
+        }
+
+        // المواضع المتتالية (التصوير المتعاقب) بعرض يقتصر على المسافة المقطوعة
+        function renderPositionsBlock(scale) {
+            const H = 150;
+            let maxRight = 0;
+            photos.forEach(p => { maxRight = Math.max(maxRight, p.x + 22, p.x + 11 + p.velocity * 2); });
+            const W = Math.min(900, Math.max(450, Math.ceil(maxRight / 80) * 80 + 50));
+            const { c, ctx } = newExportCanvas(W, H, scale);
+            drawChronophotography(ctx, W, H, { noClear: true, photosOnly: true });
+            return c;
+        }
+
+        // أفضل توزيع (أعمدة × صفوف) يعطي أكبر عرض ممكن للنسخة الواحدة داخل صفحة A4
+        function bestGrid(n, aspect) {
+            const uw = A4.w - 2 * A4.margin, uh = A4.h - 2 * A4.margin;
+            let best = null;
+            for (let cols = 1; cols <= n; cols++) {
+                const rows = Math.ceil(n / cols);
+                const cw = (uw - (cols - 1) * A4.gap) / cols;
+                const ch = (uh - (rows - 1) * A4.gap) / rows;
+                const w = Math.min(cw, ch * aspect);
+                if (!best || w > best.w + 0.5) best = { cols, rows, w, h: w / aspect };
+            }
+            return best;
+        }
+
+        function maxCopies(aspect) {
+            let best = 1;
+            for (let n = 1; n <= 60; n++) {
+                if (bestGrid(n, aspect).w >= MAX_MODE_MIN_WIDTH) best = n;
+            }
+            return best;
+        }
+
+        function composeSheet(block, count) {
+            const g = bestGrid(count, block.width / block.height);
+            const sheet = document.createElement('canvas');
+            sheet.width = A4.w;
+            sheet.height = A4.h;
+            const ctx = sheet.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, A4.w, A4.h);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            const gridW = g.cols * g.w + (g.cols - 1) * A4.gap;
+            const startX = (A4.w - gridW) / 2;
+            for (let k = 0; k < count; k++) {
+                const r = Math.floor(k / g.cols), col = k % g.cols;
+                ctx.drawImage(block, startX + col * (g.w + A4.gap), A4.margin + r * (g.h + A4.gap), g.w, g.h);
+            }
+            return sheet;
+        }
+
+        // يبني الصورة المطلوبة ويعيد { canvas, count, name }
+        function buildExport(what, copies) {
+            if (photos.length === 0) return null;
+            const block = (what === 'graph') ? renderGraphBlock(EXPORT_SCALE) : renderPositionsBlock(EXPORT_SCALE);
+            let canvas, count;
+            if (copies === '1') {
+                canvas = block;
+                count = 1;
+            } else {
+                count = (copies === '9') ? 9 : maxCopies(block.width / block.height);
+                canvas = composeSheet(block, count);
+            }
+            const base = (what === 'graph') ? 'graph' : 'positions';
+            const name = copies === '1'
+                ? `${base}_${currentScenario}_x1.png`
+                : `${base}_${currentScenario}_A4_x${count}.png`;
+            return { canvas, count, name };
+        }
+
+        function downloadCanvas(canvas, name) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob(blob => {
+                    if (!blob) { reject(new Error('toBlob')); return; }
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = name;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 10000);
+                    resolve();
+                }, 'image/png');
+            });
+        }
+        
         // معالجات الأحداث
         // إعادة التعيين الكاملة (تُستعمل عند الضغط على الزر وعند تغيير السيناريو)
         function resetSimulation() {
@@ -923,6 +1202,39 @@
         
         document.getElementById('resetBtn').addEventListener('click', resetSimulation);
         
+        // نافذة الحفظ
+        const saveOverlay = document.getElementById('saveOverlay');
+        const saveNote = document.getElementById('saveNote');
+
+        function setSaveNote(text, isError) {
+            saveNote.textContent = text;
+            saveNote.className = 'modal-note' + (isError ? ' error' : (text ? ' ok' : ''));
+        }
+
+        document.getElementById('saveBtn').addEventListener('click', () => {
+            setSaveNote('', false);
+            saveOverlay.hidden = false;
+        });
+        document.getElementById('saveCancel').addEventListener('click', () => { saveOverlay.hidden = true; });
+        saveOverlay.addEventListener('click', (e) => { if (e.target === saveOverlay) saveOverlay.hidden = true; });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') saveOverlay.hidden = true; });
+
+        document.getElementById('saveGo').addEventListener('click', async () => {
+            const what = document.getElementById('saveWhat').value;
+            const copies = document.getElementById('saveCopies').value;
+            const result = buildExport(what, copies);
+            if (!result) {
+                setSaveNote('شغّل المحاكاة أولاً حتى تُلتقط الصور، ثم احفظ.', true);
+                return;
+            }
+            try {
+                await downloadCanvas(result.canvas, result.name);
+                setSaveNote(`تم الحفظ: ${result.name} (${result.count} ${result.count === 1 ? 'نسخة' : 'نسخ'})`, false);
+            } catch (err) {
+                setSaveNote('تعذّر الحفظ على هذا المتصفح.', true);
+            }
+        });
+
         // بدء التطبيق
         requestAnimationFrame(animate);
     </script>

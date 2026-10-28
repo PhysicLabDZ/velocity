@@ -1,6 +1,6 @@
 // عامل الخدمة - velocity
 // عند كل تحديث للتطبيق: غيّر رقم الإصدار هنا ليصل التحديث إلى من ثبّت التطبيق
-const CACHE_VERSION = 'velocity-v1';
+const CACHE_VERSION = 'velocity-v2';
 
 const PRECACHE = [
   './',
