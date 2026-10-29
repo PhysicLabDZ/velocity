@@ -443,6 +443,22 @@
             color: #2c3e50;
         }
 
+        .modal .check-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 14px 0 0;
+            cursor: pointer;
+        }
+
+        .modal .check-row[hidden] { display: none; }
+
+        .modal .check-row input {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
         .modal-note {
             min-height: 1.4em;
             margin-top: 12px;
@@ -501,20 +517,20 @@
         
         <div class="main-layout">
             <div class="visualization-area">
-                <!-- التصوير المتعاقب -->
+                
                 <div class="canvas-container">
                     <h3>📸 التصوير المتعاقب (Chronophotography)</h3>
                     <canvas id="chronoCanvas" width="900" height="150"></canvas>
                 </div>
                 
-                <!-- المنحنى البياني -->
+                
                 <div class="canvas-container">
-                    <h3>📊 المنحنى البياني للسرعة v = f(t)</h3>
+                    <h3>📊 المنحنى البياني للسرعة</h3>
                     <canvas id="graphCanvas" width="900" height="480"></canvas>
                 </div>
             </div>
             
-            <!-- لوحة التحكم -->
+            
             <div class="controls-panel">
                 <div class="three-col-row">
                     <div class="control-section">
@@ -523,7 +539,7 @@
                             <button class="primary" id="startBtn">▶ بدء المحاكاة</button>
                             <button class="danger" id="pauseBtn">⏸ إيقاف مؤقت</button>
                             <button class="secondary" id="resetBtn">🔄 إعادة تعيين</button>
-                            <button class="info" id="saveBtn">💾 حفظ كصورة</button>
+                            <button class="info" id="saveBtn">💾 حفظ المخطط</button>
                         </div>
                     </div>
 
@@ -581,22 +597,33 @@
         </div>
     </div>
 
-    <!-- نافذة حفظ الصور -->
+    
     <div id="saveOverlay" class="modal-overlay" hidden>
         <div class="modal" role="dialog" aria-modal="true" aria-labelledby="saveTitle">
-            <h3 id="saveTitle">💾 حفظ كصورة PNG</h3>
+            <h3 id="saveTitle">💾 حفظ المخطط</h3>
 
             <label for="saveWhat">ما الذي تريد حفظه؟</label>
             <select id="saveWhat">
-                <option value="graph">المنحنى البياني مع جدول القيم</option>
+                <option value="graph">المنحنى البياني</option>
                 <option value="positions">المواضع المتتالية (التصوير المتعاقب)</option>
             </select>
+
+            <label class="check-row" id="saveTableRow">
+                <input type="checkbox" id="saveTable" checked>
+                <span>إظهار جدول القيم (الزمن / السرعة)</span>
+            </label>
 
             <label for="saveCopies">عدد النسخ:</label>
             <select id="saveCopies">
                 <option value="1">نسخة واحدة</option>
                 <option value="9">9 نسخ في صفحة A4</option>
                 <option value="max">أقصى عدد ممكن في صفحة A4</option>
+            </select>
+
+            <label for="saveFormat">الصيغة:</label>
+            <select id="saveFormat">
+                <option value="png">صورة PNG</option>
+                <option value="docx">ملف Word (.docx)</option>
             </select>
 
             <p id="saveNote" class="modal-note"></p>
@@ -608,636 +635,7 @@
         </div>
     </div>
 
-    <script>
-        const chronoCanvas = document.getElementById('chronoCanvas');
-        const chronoCtx = chronoCanvas.getContext('2d');
-        const graphCanvas = document.getElementById('graphCanvas');
-        const graphCtx = graphCanvas.getContext('2d');
-        
-        let running = false;
-        let paused = false;
-        let time = 0;
-        let distance = 0;
-        let velocity = 0;
-        let animationSpeed = 1;
-        let photoInterval = 0.7;
-        let lastPhotoTime = 0;
-        let photos = [];
-        let velocityData = [];
-        let currentScenario = 'combined';
-        
-        // السيناريوهات
-        const scenarios = {
-            acceleration: {
-                name: 'حركة متسارعة',
-                phases: [
-                    { duration: 5, type: 'accelerating', v0: 0, a: 4 }
-                ]
-            },
-            uniform: {
-                name: 'حركة منتظمة',
-                phases: [
-                    { duration: 5, type: 'uniform', v0: 10, a: 0 }
-                ]
-            },
-            deceleration: {
-                name: 'حركة متباطئة',
-                phases: [
-                    { duration: 5, type: 'decelerating', v0: 20, a: -4 }
-                ]
-            },
-            combined: {
-                name: 'حركة مركبة',
-                phases: [
-                    { duration: 3, type: 'accelerating', v0: 0, a: 10/3 },
-                    { duration: 3, type: 'uniform', v0: 10, a: 0 },
-                    { duration: 3, type: 'decelerating', v0: 10, a: -10/3 }
-                ]
-            },
-            'acceleration-deceleration': {
-                name: 'تسارع ثم تباطؤ',
-                phases: [
-                    { duration: 4, type: 'accelerating', v0: 0, a: 4.5 },
-                    { duration: 4, type: 'decelerating', v0: 18, a: -4.5 }
-                ]
-            }
-        };
-        
-        // حساب السرعة والمسافة بناءً على السيناريو
-        function calculateMotion(t) {
-            const scenario = scenarios[currentScenario];
-            let accumulatedTime = 0;
-            let accumulatedDistance = 0;
-            let currentVelocity = 0;
-            
-            for (let phase of scenario.phases) {
-                if (t <= accumulatedTime + phase.duration) {
-                    const phaseTime = t - accumulatedTime;
-                    currentVelocity = phase.v0 + phase.a * phaseTime;
-                    const phaseDistance = phase.v0 * phaseTime + 0.5 * phase.a * phaseTime * phaseTime;
-                    return {
-                        velocity: Math.max(0, currentVelocity),
-                        distance: accumulatedDistance + phaseDistance,
-                        type: phase.type
-                    };
-                }
-                
-                const phaseFinalVelocity = phase.v0 + phase.a * phase.duration;
-                const phaseDistance = phase.v0 * phase.duration + 0.5 * phase.a * phase.duration * phase.duration;
-                accumulatedDistance += phaseDistance;
-                accumulatedTime += phase.duration;
-            }
-            
-            // انتهى السيناريو
-            return {
-                velocity: 0,
-                distance: accumulatedDistance,
-                type: 'stopped'
-            };
-        }
-        
-        // رسم التصوير المتعاقب
-        // الوسائط الاختيارية (ctx, W, H, opts) تُستعمل عند التصدير للرسم على كانفاس آخر
-        function drawChronophotography(ctx = chronoCtx, W = chronoCanvas.width, H = chronoCanvas.height, opts = {}) {
-            if (!opts.noClear) ctx.clearRect(0, 0, W, H);
-            
-            // الأرضية
-            ctx.fillStyle = '#95a5a6';
-            ctx.fillRect(0, H - 30, W, 30);
-            
-            // خط الأرضية
-            ctx.strokeStyle = '#7f8c8d';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(0, H - 30);
-            ctx.lineTo(W, H - 30);
-            ctx.stroke();
-            
-            // علامات المسافة
-            ctx.fillStyle = '#34495e';
-            ctx.font = '12px Arial';
-            for (let i = 0; i <= 11; i++) {
-                const x = i * 80; // 8px لكل متر: كل 10m = 80px
-                if (i > 0 && x + 18 > W) break;
-                ctx.textAlign = (i === 0) ? 'left' : 'center';
-                ctx.fillText(`${i * 10}m`, x, H - 35);
-            }
-            
-            // رسم كل الصور المتعاقبة الملتقطة فعلياً (بلا إخفاء أي موضع)
-            let prevPhotoX = null;
-            photos.forEach((photo, index) => {
-                const alpha = 0.3 + (index / photos.length) * 0.7;
-                drawCar(ctx, photo.x, H - 80, photo.velocity, alpha);
-
-                if (photo.velocity > 0) {
-                    ctx.globalAlpha = alpha;
-                    drawVelocityArrow(ctx, W, photo.x + 11, H - 96, photo.velocity, '#e74c3c', 2, 8, 5);
-                    ctx.globalAlpha = 1;
-                }
-
-                // قيمة المسافة الفعلية بين هذه الصورة والصورة السابقة (فقط عند وجود مساحة كافية لقراءتها)
-                if (prevPhotoX !== null) {
-                    const gapPx = photo.x - prevPhotoX;
-                    const gapMeters = gapPx / 8;
-                    if (gapPx >= 20) {
-                        ctx.globalAlpha = Math.max(alpha, 0.55);
-                        ctx.fillStyle = '#2c3e50';
-                        ctx.font = 'bold 10px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.fillText(gapMeters.toFixed(1)+'m', prevPhotoX + gapPx/2, H - 108);
-                        ctx.globalAlpha = 1;
-                    }
-                }
-                prevPhotoX = photo.x;
-            });
-            
-            // رسم السيارة الحالية (لا تُرسم في الصور المحفوظة)
-            if (!opts.photosOnly && (running || paused || time > 0)) {
-                const x = Math.min(distance * 8, W - 50);
-                drawCar(ctx, x, H - 80, velocity, 1);
-
-                // سهم السرعة الحالي
-                if (velocity > 0) {
-                    const tipX = drawVelocityArrow(ctx, W, x + 11, H - 96, velocity, '#27ae60', 3, 10, 7);
-
-                    // تسمية السرعة (تبقى داخل حدود الكانفاس)
-                    const label = `v = ${velocity.toFixed(1)} m/s`;
-                    ctx.fillStyle = '#27ae60';
-                    ctx.font = 'bold 14px Arial';
-                    ctx.textAlign = 'left';
-                    const labelW = ctx.measureText(label).width;
-                    const labelX = Math.min(tipX + 6, W - labelW - 4);
-                    ctx.fillText(label, labelX, H - 91);
-                }
-            }
-        }
-
-        // سهم السرعة: مقياس موحد 2px لكل m/s، يبدأ من مركز السيارة ولا يتجاوز حافة الكانفاس
-        // رأس السهم يصغر مع قصر الخط فلا يظهر رأساً فقط عند السرعات الصغيرة
-        function drawVelocityArrow(ctx, W, x0, y, v, color, lineW, headLen, headHalf) {
-            const tipX = Math.min(x0 + v * 2, W - 4);
-            const len = tipX - x0;
-            if (len < 1.5) return tipX;
-
-            const hl = Math.min(headLen, len);
-            const hh = headHalf * (hl / headLen);
-
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineW;
-            ctx.beginPath();
-            ctx.moveTo(x0, y);
-            ctx.lineTo(tipX - hl * 0.5, y);
-            ctx.stroke();
-
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.moveTo(tipX, y);
-            ctx.lineTo(tipX - hl, y - hh);
-            ctx.lineTo(tipX - hl, y + hh);
-            ctx.closePath();
-            ctx.fill();
-            return tipX;
-        }
-        
-        // رسم السيارة
-        function drawCar(ctx, x, y, velocity, alpha) {
-            ctx.globalAlpha = alpha;
-            
-            // جسم السيارة (مصغّر لتقليل التداخل عند تقارب المواضع)
-            ctx.fillStyle = '#3498db';
-            ctx.fillRect(x, y, 22, 11);
-            
-            // سقف السيارة
-            ctx.fillStyle = '#2980b9';
-            ctx.fillRect(x + 5, y - 6, 11, 6);
-            
-            // العجلات
-            ctx.fillStyle = '#2c3e50';
-            ctx.beginPath();
-            ctx.arc(x + 5, y + 11, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(x + 17, y + 11, 3, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.globalAlpha = 1;
-        }
-        
-        // رسم المنحنى البياني
-        // الوسائط الاختيارية (ctx, W, H, opts) تُستعمل عند التصدير للرسم على كانفاس آخر
-        function drawGraph(ctx = graphCtx, W = graphCanvas.width, H = graphCanvas.height, opts = {}) {
-            if (!opts.noClear) ctx.clearRect(0, 0, W, H);
-            
-            // الشبكة
-            ctx.strokeStyle = '#e0e0e0';
-            ctx.lineWidth = 1;
-            
-            // خطوط أفقية (السرعة)
-            for (let i = 0; i <= 10; i++) {
-                const y = H - 40 - (i * (H - 60) / 10);
-                ctx.beginPath();
-                ctx.moveTo(60, y);
-                ctx.lineTo(W - 20, y);
-                ctx.stroke();
-                
-                // تسميات السرعة
-                ctx.fillStyle = '#34495e';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'right';
-                ctx.fillText(`${i * 2}`, 50, y + 4);
-            }
-            
-            // خطوط عمودية (الزمن)
-            for (let i = 0; i <= 10; i++) {
-                const x = 60 + (i * (W - 80) / 10);
-                ctx.beginPath();
-                ctx.moveTo(x, 20);
-                ctx.lineTo(x, H - 40);
-                ctx.stroke();
-                
-                // تسميات الزمن
-                ctx.fillStyle = '#34495e';
-                ctx.font = '12px Arial';
-                ctx.textAlign = 'center';
-                ctx.fillText(`${i}s`, x, H - 20);
-            }
-            
-            // المحاور
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 2;
-            
-            // المحور العمودي
-            ctx.beginPath();
-            ctx.moveTo(60, 20);
-            ctx.lineTo(60, H - 40);
-            ctx.stroke();
-            
-            // المحور الأفقي
-            ctx.beginPath();
-            ctx.moveTo(60, H - 40);
-            ctx.lineTo(W - 20, H - 40);
-            ctx.stroke();
-            
-            // تسميات المحاور
-            ctx.fillStyle = '#2c3e50';
-            ctx.font = 'bold 14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('الزمن (s)', W / 2, H - 5);
-            
-            ctx.save();
-            ctx.translate(15, H / 2);
-            ctx.rotate(-Math.PI / 2);
-            ctx.fillText('السرعة (m/s)', 0, 0);
-            ctx.restore();
-            
-            // رسم المنحنى
-            if (velocityData.length > 1) {
-                const scenario = scenarios[currentScenario];
-                let accumulatedTime = 0;
-                
-                // رسم كل مرحلة بلون مختلف
-                for (let phaseIndex = 0; phaseIndex < scenario.phases.length; phaseIndex++) {
-                    const phase = scenario.phases[phaseIndex];
-                    const phaseStartTime = accumulatedTime;
-                    const phaseEndTime = accumulatedTime + phase.duration;
-                    
-                    // تحديد اللون حسب نوع الحركة
-                    let color;
-                    if (phase.type === 'accelerating') {
-                        color = '#2ecc71';
-                    } else if (phase.type === 'uniform') {
-                        color = '#3498db';
-                    } else {
-                        color = '#e74c3c';
-                    }
-                    
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    
-                    let firstPoint = true;
-                    for (let i = 0; i < velocityData.length; i++) {
-                        const dataPoint = velocityData[i];
-                        if (dataPoint.time >= phaseStartTime && dataPoint.time <= phaseEndTime) {
-                            const x = 60 + (dataPoint.time / 10) * (W - 80);
-                            const y = H - 40 - (dataPoint.velocity / 20) * (H - 60);
-                            
-                            if (firstPoint) {
-                                ctx.moveTo(x, y);
-                                firstPoint = false;
-                            } else {
-                                ctx.lineTo(x, y);
-                            }
-                        }
-                    }
-                    
-                    ctx.stroke();
-                    
-                    accumulatedTime += phase.duration;
-                }
-                
-                // رسم النقطة الحالية (لا تُرسم في الصور المحفوظة)
-                if (!opts.noMarker && velocityData.length > 0) {
-                    const lastPoint = velocityData[velocityData.length - 1];
-                    const x = 60 + (lastPoint.time / 10) * (W - 80);
-                    const y = H - 40 - (lastPoint.velocity / 20) * (H - 60);
-                    
-                    ctx.fillStyle = '#e74c3c';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-        
-        // تحديث الواجهة (لوحة الحالة أُلغيت بناءً على الطلب)
-        function updateUI() {
-            // لا شيء - تم إلغاء لوحة الحالة الحية
-        }
-        
-        // حلقة الرسم
-        function getTotalDuration() {
-            return scenarios[currentScenario].phases.reduce((sum, p) => sum + p.duration, 0);
-        }
-
-        let lastFrameTs = null;
-
-        function animate(ts) {
-            // الزمن الحقيقي بين إطارين (مستقل عن معدل تحديث الشاشة)
-            let dt = 0;
-            if (lastFrameTs !== null && ts !== undefined) {
-                dt = Math.max(0, Math.min((ts - lastFrameTs) / 1000, 0.1));
-            }
-            if (ts !== undefined) lastFrameTs = ts;
-
-            if (running && !paused) {
-                const totalDuration = getTotalDuration();
-                time = Math.min(time + dt * animationSpeed, totalDuration);
-
-                const motion = calculateMotion(time);
-                velocity = motion.velocity;
-                distance = motion.distance;
-
-                // حفظ بيانات السرعة
-                velocityData.push({ time: time, velocity: velocity });
-
-                // التقاط الصور عند مضاعفات فترة التصوير بالضبط
-                while (lastPhotoTime + photoInterval <= time + 1e-9) {
-                    lastPhotoTime += photoInterval;
-                    const pm = calculateMotion(lastPhotoTime);
-                    const px = Math.min(pm.distance * 8, chronoCanvas.width - 50);
-                    photos.push({ x: px, velocity: pm.velocity });
-                }
-
-                // إيقاف عند نهاية السيناريو (تبقى السرعة والموضع النهائيان)
-                if (time >= totalDuration) {
-                    running = false;
-                }
-            }
-
-            drawChronophotography();
-            drawGraph();
-            updateUI();
-
-            requestAnimationFrame(animate);
-        }
-        
-        // ===== حفظ كصورة PNG =====
-        // الصورة تُرسم من الحالة الحالية (ما التُقط من صور حتى هذه اللحظة)
-        const EXPORT_SCALE = 3;
-        const A4 = { w: 2480, h: 3508, margin: 118, gap: 47 }; // صفحة A4 عمودية بدقة 300dpi، هوامش 10mm، فاصل 4mm
-        const MAX_MODE_MIN_WIDTH = 1063;                        // أصغر عرض للنسخة الواحدة في وضع "أقصى عدد" (≈ 90mm)
-
-        function fmtNum(n, d) { return String(parseFloat(n.toFixed(d))); }
-
-        function newExportCanvas(w, h, scale) {
-            const c = document.createElement('canvas');
-            c.width = Math.round(w * scale);
-            c.height = Math.round(h * scale);
-            const ctx = c.getContext('2d');
-            ctx.scale(scale, scale);
-            ctx.direction = 'rtl';
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, w, h);
-            return { c, ctx };
-        }
-
-        // المنحنى البياني v = f(t) + جدول أفقي (الزمن / السرعة) عند لحظات التصوير
-        function renderGraphBlock(scale) {
-            const W = 720, GH = 400, rowH = 30, gap = 12, pad = 10;
-            const H = GH + gap + rowH * 2 + pad;
-            const { c, ctx } = newExportCanvas(W, H, scale);
-
-            drawGraph(ctx, W, GH, { noClear: true, noMarker: true });
-
-            const n = photos.length;
-            const labelW = 104, x0 = 10, y0 = GH + gap;
-            const colW = (W - 20 - labelW) / n;
-            const vf = colW < 34 ? 12 : 13;
-            const rows = [
-                { label: 'الزمن t (s)', vals: photos.map((p, i) => fmtNum(i * photoInterval, 2)) },
-                { label: 'السرعة v (m/s)', vals: photos.map(p => fmtNum(p.velocity, 1)) }
-            ];
-
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = '#34495e';
-            ctx.textBaseline = 'middle';
-            ctx.textAlign = 'center';
-            rows.forEach((row, r) => {
-                const y = y0 + r * rowH;
-                ctx.fillStyle = '#ecf0f1';
-                ctx.fillRect(x0, y, labelW, rowH);
-                ctx.strokeRect(x0, y, labelW, rowH);
-                ctx.fillStyle = '#2c3e50';
-                ctx.font = 'bold 13px Arial';
-                ctx.fillText(row.label, x0 + labelW / 2, y + rowH / 2 + 1);
-
-                row.vals.forEach((v, i) => {
-                    const x = x0 + labelW + i * colW;
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(x, y, colW, rowH);
-                    ctx.strokeRect(x, y, colW, rowH);
-                    ctx.fillStyle = '#2c3e50';
-                    ctx.font = `bold ${vf}px Arial`;
-                    ctx.fillText(v, x + colW / 2, y + rowH / 2 + 1);
-                });
-            });
-            ctx.textBaseline = 'alphabetic';
-            return c;
-        }
-
-        // المواضع المتتالية (التصوير المتعاقب) بعرض يقتصر على المسافة المقطوعة
-        function renderPositionsBlock(scale) {
-            const H = 150;
-            let maxRight = 0;
-            photos.forEach(p => { maxRight = Math.max(maxRight, p.x + 22, p.x + 11 + p.velocity * 2); });
-            const W = Math.min(900, Math.max(450, Math.ceil(maxRight / 80) * 80 + 50));
-            const { c, ctx } = newExportCanvas(W, H, scale);
-            drawChronophotography(ctx, W, H, { noClear: true, photosOnly: true });
-            return c;
-        }
-
-        // أفضل توزيع (أعمدة × صفوف) يعطي أكبر عرض ممكن للنسخة الواحدة داخل صفحة A4
-        function bestGrid(n, aspect) {
-            const uw = A4.w - 2 * A4.margin, uh = A4.h - 2 * A4.margin;
-            let best = null;
-            for (let cols = 1; cols <= n; cols++) {
-                const rows = Math.ceil(n / cols);
-                const cw = (uw - (cols - 1) * A4.gap) / cols;
-                const ch = (uh - (rows - 1) * A4.gap) / rows;
-                const w = Math.min(cw, ch * aspect);
-                if (!best || w > best.w + 0.5) best = { cols, rows, w, h: w / aspect };
-            }
-            return best;
-        }
-
-        function maxCopies(aspect) {
-            let best = 1;
-            for (let n = 1; n <= 60; n++) {
-                if (bestGrid(n, aspect).w >= MAX_MODE_MIN_WIDTH) best = n;
-            }
-            return best;
-        }
-
-        function composeSheet(block, count) {
-            const g = bestGrid(count, block.width / block.height);
-            const sheet = document.createElement('canvas');
-            sheet.width = A4.w;
-            sheet.height = A4.h;
-            const ctx = sheet.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, A4.w, A4.h);
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            const gridW = g.cols * g.w + (g.cols - 1) * A4.gap;
-            const startX = (A4.w - gridW) / 2;
-            for (let k = 0; k < count; k++) {
-                const r = Math.floor(k / g.cols), col = k % g.cols;
-                ctx.drawImage(block, startX + col * (g.w + A4.gap), A4.margin + r * (g.h + A4.gap), g.w, g.h);
-            }
-            return sheet;
-        }
-
-        // يبني الصورة المطلوبة ويعيد { canvas, count, name }
-        function buildExport(what, copies) {
-            if (photos.length === 0) return null;
-            const block = (what === 'graph') ? renderGraphBlock(EXPORT_SCALE) : renderPositionsBlock(EXPORT_SCALE);
-            let canvas, count;
-            if (copies === '1') {
-                canvas = block;
-                count = 1;
-            } else {
-                count = (copies === '9') ? 9 : maxCopies(block.width / block.height);
-                canvas = composeSheet(block, count);
-            }
-            const base = (what === 'graph') ? 'graph' : 'positions';
-            const name = copies === '1'
-                ? `${base}_${currentScenario}_x1.png`
-                : `${base}_${currentScenario}_A4_x${count}.png`;
-            return { canvas, count, name };
-        }
-
-        function downloadCanvas(canvas, name) {
-            return new Promise((resolve, reject) => {
-                canvas.toBlob(blob => {
-                    if (!blob) { reject(new Error('toBlob')); return; }
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = name;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    setTimeout(() => URL.revokeObjectURL(url), 10000);
-                    resolve();
-                }, 'image/png');
-            });
-        }
-        
-        // معالجات الأحداث
-        // إعادة التعيين الكاملة (تُستعمل عند الضغط على الزر وعند تغيير السيناريو)
-        function resetSimulation() {
-            running = false;
-            paused = false;
-            time = 0;
-            distance = 0;
-            velocity = 0;
-            lastPhotoTime = 0;
-            photos = [];
-            velocityData = [];
-            updateUI();
-        }
-
-        document.getElementById('scenario').addEventListener('change', (e) => {
-            currentScenario = e.target.value;
-            resetSimulation();
-        });
-        
-        document.getElementById('speed').addEventListener('change', (e) => {
-            animationSpeed = parseFloat(e.target.value);
-        });
-        
-        document.getElementById('photoInterval').addEventListener('change', (e) => {
-            photoInterval = parseFloat(e.target.value);
-            resetSimulation();
-        });
-
-        document.getElementById('startBtn').addEventListener('click', () => {
-            // بعد انتهاء الحركة: البدء من جديد
-            if (time >= getTotalDuration()) {
-                resetSimulation();
-            }
-            // صورة عند الزمن t = 0 (موضع الانطلاق)
-            if (time === 0 && photos.length === 0) {
-                const m0 = calculateMotion(0);
-                photos.push({ x: m0.distance * 8, velocity: m0.velocity });
-            }
-            running = true;
-            paused = false;
-        });
-        
-        document.getElementById('pauseBtn').addEventListener('click', () => {
-            paused = !paused;
-        });
-        
-        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
-        
-        // نافذة الحفظ
-        const saveOverlay = document.getElementById('saveOverlay');
-        const saveNote = document.getElementById('saveNote');
-
-        function setSaveNote(text, isError) {
-            saveNote.textContent = text;
-            saveNote.className = 'modal-note' + (isError ? ' error' : (text ? ' ok' : ''));
-        }
-
-        document.getElementById('saveBtn').addEventListener('click', () => {
-            setSaveNote('', false);
-            saveOverlay.hidden = false;
-        });
-        document.getElementById('saveCancel').addEventListener('click', () => { saveOverlay.hidden = true; });
-        saveOverlay.addEventListener('click', (e) => { if (e.target === saveOverlay) saveOverlay.hidden = true; });
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') saveOverlay.hidden = true; });
-
-        document.getElementById('saveGo').addEventListener('click', async () => {
-            const what = document.getElementById('saveWhat').value;
-            const copies = document.getElementById('saveCopies').value;
-            const result = buildExport(what, copies);
-            if (!result) {
-                setSaveNote('شغّل المحاكاة أولاً حتى تُلتقط الصور، ثم احفظ.', true);
-                return;
-            }
-            try {
-                await downloadCanvas(result.canvas, result.name);
-                setSaveNote(`تم الحفظ: ${result.name} (${result.count} ${result.count === 1 ? 'نسخة' : 'نسخ'})`, false);
-            } catch (err) {
-                setSaveNote('تعذّر الحفظ على هذا المتصفح.', true);
-            }
-        });
-
-        // بدء التطبيق
-        requestAnimationFrame(animate);
-    </script>
+    <script>const _0x51a3df=_0x54bc;(function(_0x4ba2e6,_0x3de9fa){const _0x5b9613=_0x54bc,_0x261fad=_0x4ba2e6();while(!![]){try{const _0x4a78a3=parseInt(_0x5b9613(0x218))/0x1*(-parseInt(_0x5b9613(0x256))/0x2)+parseInt(_0x5b9613(0x24b))/0x3*(-parseInt(_0x5b9613(0x296))/0x4)+parseInt(_0x5b9613(0x1e0))/0x5*(-parseInt(_0x5b9613(0x1fe))/0x6)+-parseInt(_0x5b9613(0x1e8))/0x7*(parseInt(_0x5b9613(0x215))/0x8)+parseInt(_0x5b9613(0x244))/0x9+-parseInt(_0x5b9613(0x298))/0xa+-parseInt(_0x5b9613(0x1d8))/0xb*(-parseInt(_0x5b9613(0x261))/0xc);if(_0x4a78a3===_0x3de9fa)break;else _0x261fad['push'](_0x261fad['shift']());}catch(_0x331aa6){_0x261fad['push'](_0x261fad['shift']());}}}(_0x562c,0x2eb59));const chronoCanvas=document['getElementById'](_0x51a3df(0x1ff)),chronoCtx=chronoCanvas[_0x51a3df(0x26a)]('2d'),graphCanvas=document[_0x51a3df(0x24a)]('graphCanvas'),graphCtx=graphCanvas[_0x51a3df(0x26a)]('2d');let running=![],paused=![],time=0x0,distance=0x0,velocity=0x0,animationSpeed=0x1,photoInterval=0.7,lastPhotoTime=0x0,photos=[],velocityData=[],currentScenario='combined';const scenarios={'acceleration':{'name':'حركة\x20متسارعة','phases':[{'duration':0x5,'type':_0x51a3df(0x1ce),'v0':0x0,'a':0x4}]},'uniform':{'name':_0x51a3df(0x2ac),'phases':[{'duration':0x5,'type':_0x51a3df(0x27e),'v0':0xa,'a':0x0}]},'deceleration':{'name':_0x51a3df(0x264),'phases':[{'duration':0x5,'type':_0x51a3df(0x265),'v0':0x14,'a':-0x4}]},'combined':{'name':_0x51a3df(0x205),'phases':[{'duration':0x3,'type':_0x51a3df(0x1ce),'v0':0x0,'a':0xa/0x3},{'duration':0x3,'type':'uniform','v0':0xa,'a':0x0},{'duration':0x3,'type':_0x51a3df(0x265),'v0':0xa,'a':-0xa/0x3}]},'acceleration-deceleration':{'name':_0x51a3df(0x1d2),'phases':[{'duration':0x4,'type':_0x51a3df(0x1ce),'v0':0x0,'a':4.5},{'duration':0x4,'type':_0x51a3df(0x265),'v0':0x12,'a':-4.5}]}};function calculateMotion(_0x23ae09){const _0x1dfafc=_0x51a3df,_0x1d0ddf=scenarios[currentScenario];let _0xac4275=0x0,_0x208c30=0x0,_0x510eb8=0x0;for(let _0x283eb0 of _0x1d0ddf[_0x1dfafc(0x1e5)]){if(_0x23ae09<=_0xac4275+_0x283eb0[_0x1dfafc(0x263)]){const _0x2cdff1=_0x23ae09-_0xac4275;_0x510eb8=_0x283eb0['v0']+_0x283eb0['a']*_0x2cdff1;const _0xadfc59=_0x283eb0['v0']*_0x2cdff1+0.5*_0x283eb0['a']*_0x2cdff1*_0x2cdff1;return{'velocity':Math[_0x1dfafc(0x284)](0x0,_0x510eb8),'distance':_0x208c30+_0xadfc59,'type':_0x283eb0[_0x1dfafc(0x1f6)]};}const _0x4380f1=_0x283eb0['v0']+_0x283eb0['a']*_0x283eb0[_0x1dfafc(0x263)],_0x113da3=_0x283eb0['v0']*_0x283eb0[_0x1dfafc(0x263)]+0.5*_0x283eb0['a']*_0x283eb0[_0x1dfafc(0x263)]*_0x283eb0[_0x1dfafc(0x263)];_0x208c30+=_0x113da3,_0xac4275+=_0x283eb0[_0x1dfafc(0x263)];}return{'velocity':0x0,'distance':_0x208c30,'type':_0x1dfafc(0x2a3)};}function drawChronophotography(_0x491a96=chronoCtx,_0x4aaf93=chronoCanvas[_0x51a3df(0x1d7)],_0x1cf7d7=chronoCanvas[_0x51a3df(0x21a)],_0x5ea8ce={}){const _0x2e4725=_0x51a3df;if(!_0x5ea8ce[_0x2e4725(0x22a)])_0x491a96[_0x2e4725(0x206)](0x0,0x0,_0x4aaf93,_0x1cf7d7);_0x491a96['fillStyle']=_0x2e4725(0x247),_0x491a96[_0x2e4725(0x225)](0x0,_0x1cf7d7-0x1e,_0x4aaf93,0x1e),_0x491a96['strokeStyle']=_0x2e4725(0x2a7),_0x491a96[_0x2e4725(0x245)]=0x2,_0x491a96[_0x2e4725(0x28c)](),_0x491a96[_0x2e4725(0x1f0)](0x0,_0x1cf7d7-0x1e),_0x491a96[_0x2e4725(0x1df)](_0x4aaf93,_0x1cf7d7-0x1e),_0x491a96[_0x2e4725(0x23f)](),_0x491a96[_0x2e4725(0x278)]=_0x2e4725(0x1f9),_0x491a96[_0x2e4725(0x1f4)]=_0x2e4725(0x2a6);for(let _0x1c58d1=0x0;_0x1c58d1<=0xb;_0x1c58d1++){const _0x3d803a=_0x1c58d1*0x50;if(_0x1c58d1>0x0&&_0x3d803a+0x12>_0x4aaf93)break;_0x491a96[_0x2e4725(0x268)]=_0x1c58d1===0x0?_0x2e4725(0x212):_0x2e4725(0x275),_0x491a96[_0x2e4725(0x1cf)](_0x1c58d1*0xa+'m',_0x3d803a,_0x1cf7d7-0x23);}let _0xd1cc69=null;photos[_0x2e4725(0x223)]((_0x1e8b2b,_0x3a0436)=>{const _0x100012=_0x2e4725,_0x24c2c5=0.3+_0x3a0436/photos[_0x100012(0x272)]*0.7;drawCar(_0x491a96,_0x1e8b2b['x'],_0x1cf7d7-0x50,_0x1e8b2b['velocity'],_0x24c2c5);_0x1e8b2b[_0x100012(0x230)]>0x0&&(_0x491a96[_0x100012(0x28a)]=_0x24c2c5,drawVelocityArrow(_0x491a96,_0x4aaf93,_0x1e8b2b['x']+0xb,_0x1cf7d7-0x60,_0x1e8b2b[_0x100012(0x230)],_0x100012(0x297),0x2,0x8,0x5),_0x491a96[_0x100012(0x28a)]=0x1);if(_0xd1cc69!==null){const _0x47c2b1=_0x1e8b2b['x']-_0xd1cc69,_0x214cd1=_0x47c2b1/0x8;_0x47c2b1>=0x14&&(_0x491a96[_0x100012(0x28a)]=Math[_0x100012(0x284)](_0x24c2c5,0.55),_0x491a96['fillStyle']=_0x100012(0x1db),_0x491a96[_0x100012(0x1f4)]=_0x100012(0x202),_0x491a96[_0x100012(0x268)]=_0x100012(0x275),_0x491a96[_0x100012(0x1cf)](_0x214cd1[_0x100012(0x25a)](0x1)+'m',_0xd1cc69+_0x47c2b1/0x2,_0x1cf7d7-0x6c),_0x491a96[_0x100012(0x28a)]=0x1);}_0xd1cc69=_0x1e8b2b['x'];});if(!_0x5ea8ce[_0x2e4725(0x2b9)]&&(running||paused||time>0x0)){const _0x1c4e46=Math[_0x2e4725(0x1ec)](distance*0x8,_0x4aaf93-0x32);drawCar(_0x491a96,_0x1c4e46,_0x1cf7d7-0x50,velocity,0x1);if(velocity>0x0){const _0x5ddcb2=drawVelocityArrow(_0x491a96,_0x4aaf93,_0x1c4e46+0xb,_0x1cf7d7-0x60,velocity,_0x2e4725(0x22b),0x3,0xa,0x7),_0x12b24c=_0x2e4725(0x280)+velocity[_0x2e4725(0x25a)](0x1)+_0x2e4725(0x260);_0x491a96[_0x2e4725(0x278)]=_0x2e4725(0x22b),_0x491a96[_0x2e4725(0x1f4)]=_0x2e4725(0x228),_0x491a96[_0x2e4725(0x268)]=_0x2e4725(0x212);const _0xacf675=_0x491a96[_0x2e4725(0x249)](_0x12b24c)[_0x2e4725(0x1d7)],_0x5bd24a=Math[_0x2e4725(0x1ec)](_0x5ddcb2+0x6,_0x4aaf93-_0xacf675-0x4);_0x491a96[_0x2e4725(0x1cf)](_0x12b24c,_0x5bd24a,_0x1cf7d7-0x5b);}}}function drawVelocityArrow(_0x11dc95,_0x4ac577,_0x141ff1,_0x165bfb,_0x256c23,_0x2a3fbf,_0x12f605,_0x241e57,_0x18832a){const _0x3b7166=_0x51a3df,_0x1922b2=Math[_0x3b7166(0x1ec)](_0x141ff1+_0x256c23*0x2,_0x4ac577-0x4),_0x2c7b2f=_0x1922b2-_0x141ff1;if(_0x2c7b2f<1.5)return _0x1922b2;const _0x331581=Math[_0x3b7166(0x1ec)](_0x241e57,_0x2c7b2f),_0x380e39=_0x18832a*(_0x331581/_0x241e57);return _0x11dc95[_0x3b7166(0x1e2)]=_0x2a3fbf,_0x11dc95[_0x3b7166(0x245)]=_0x12f605,_0x11dc95[_0x3b7166(0x28c)](),_0x11dc95[_0x3b7166(0x1f0)](_0x141ff1,_0x165bfb),_0x11dc95[_0x3b7166(0x1df)](_0x1922b2-_0x331581*0.5,_0x165bfb),_0x11dc95[_0x3b7166(0x23f)](),_0x11dc95[_0x3b7166(0x278)]=_0x2a3fbf,_0x11dc95[_0x3b7166(0x28c)](),_0x11dc95[_0x3b7166(0x1f0)](_0x1922b2,_0x165bfb),_0x11dc95[_0x3b7166(0x1df)](_0x1922b2-_0x331581,_0x165bfb-_0x380e39),_0x11dc95[_0x3b7166(0x1df)](_0x1922b2-_0x331581,_0x165bfb+_0x380e39),_0x11dc95[_0x3b7166(0x21d)](),_0x11dc95[_0x3b7166(0x27a)](),_0x1922b2;}function drawCar(_0x1063d5,_0x1882eb,_0x926c01,_0x2c9f2b,_0x212bdb){const _0x5be944=_0x51a3df;_0x1063d5[_0x5be944(0x28a)]=_0x212bdb,_0x1063d5[_0x5be944(0x278)]=_0x5be944(0x204),_0x1063d5[_0x5be944(0x225)](_0x1882eb,_0x926c01,0x16,0xb),_0x1063d5[_0x5be944(0x278)]=_0x5be944(0x257),_0x1063d5[_0x5be944(0x225)](_0x1882eb+0x5,_0x926c01-0x6,0xb,0x6),_0x1063d5[_0x5be944(0x278)]=_0x5be944(0x1db),_0x1063d5[_0x5be944(0x28c)](),_0x1063d5[_0x5be944(0x25c)](_0x1882eb+0x5,_0x926c01+0xb,0x3,0x0,Math['PI']*0x2),_0x1063d5[_0x5be944(0x27a)](),_0x1063d5[_0x5be944(0x28c)](),_0x1063d5[_0x5be944(0x25c)](_0x1882eb+0x11,_0x926c01+0xb,0x3,0x0,Math['PI']*0x2),_0x1063d5[_0x5be944(0x27a)](),_0x1063d5[_0x5be944(0x28a)]=0x1;}function drawGraph(_0x3e5d0d=graphCtx,_0x3f3e48=graphCanvas[_0x51a3df(0x1d7)],_0xf100bc=graphCanvas[_0x51a3df(0x21a)],_0x24a67d={}){const _0x19f1ac=_0x51a3df;if(!_0x24a67d[_0x19f1ac(0x22a)])_0x3e5d0d[_0x19f1ac(0x206)](0x0,0x0,_0x3f3e48,_0xf100bc);_0x3e5d0d[_0x19f1ac(0x1e2)]=_0x19f1ac(0x213),_0x3e5d0d[_0x19f1ac(0x245)]=0x1;for(let _0x2fe858=0x0;_0x2fe858<=0xa;_0x2fe858++){const _0x214dff=_0xf100bc-0x28-_0x2fe858*(_0xf100bc-0x3c)/0xa;_0x3e5d0d['beginPath'](),_0x3e5d0d[_0x19f1ac(0x1f0)](0x3c,_0x214dff),_0x3e5d0d[_0x19f1ac(0x1df)](_0x3f3e48-0x14,_0x214dff),_0x3e5d0d[_0x19f1ac(0x23f)](),_0x3e5d0d[_0x19f1ac(0x278)]=_0x19f1ac(0x1f9),_0x3e5d0d[_0x19f1ac(0x1f4)]='12px\x20Arial',_0x3e5d0d[_0x19f1ac(0x268)]=_0x19f1ac(0x28d),_0x3e5d0d[_0x19f1ac(0x1cf)](''+_0x2fe858*0x2,0x32,_0x214dff+0x4);}for(let _0x5aad1d=0x0;_0x5aad1d<=0xa;_0x5aad1d++){const _0x225c85=0x3c+_0x5aad1d*(_0x3f3e48-0x50)/0xa;_0x3e5d0d[_0x19f1ac(0x28c)](),_0x3e5d0d['moveTo'](_0x225c85,0x14),_0x3e5d0d[_0x19f1ac(0x1df)](_0x225c85,_0xf100bc-0x28),_0x3e5d0d[_0x19f1ac(0x23f)](),_0x3e5d0d['fillStyle']=_0x19f1ac(0x1f9),_0x3e5d0d[_0x19f1ac(0x1f4)]=_0x19f1ac(0x2a6),_0x3e5d0d[_0x19f1ac(0x268)]=_0x19f1ac(0x275),_0x3e5d0d[_0x19f1ac(0x1cf)](_0x5aad1d+'s',_0x225c85,_0xf100bc-0x14);}_0x3e5d0d[_0x19f1ac(0x1e2)]=_0x19f1ac(0x1db),_0x3e5d0d[_0x19f1ac(0x245)]=0x2,_0x3e5d0d[_0x19f1ac(0x28c)](),_0x3e5d0d[_0x19f1ac(0x1f0)](0x3c,0x14),_0x3e5d0d[_0x19f1ac(0x1df)](0x3c,_0xf100bc-0x28),_0x3e5d0d[_0x19f1ac(0x23f)](),_0x3e5d0d['beginPath'](),_0x3e5d0d[_0x19f1ac(0x1f0)](0x3c,_0xf100bc-0x28),_0x3e5d0d[_0x19f1ac(0x1df)](_0x3f3e48-0x14,_0xf100bc-0x28),_0x3e5d0d['stroke'](),_0x3e5d0d[_0x19f1ac(0x278)]=_0x19f1ac(0x1db),_0x3e5d0d[_0x19f1ac(0x1f4)]=_0x19f1ac(0x228),_0x3e5d0d[_0x19f1ac(0x268)]=_0x19f1ac(0x275),_0x3e5d0d['fillText'](_0x19f1ac(0x259),_0x3f3e48/0x2,_0xf100bc-0x5),_0x3e5d0d[_0x19f1ac(0x1fc)](),_0x3e5d0d[_0x19f1ac(0x2a5)](0xf,_0xf100bc/0x2),_0x3e5d0d[_0x19f1ac(0x23b)](-Math['PI']/0x2),_0x3e5d0d[_0x19f1ac(0x1cf)](_0x19f1ac(0x291),0x0,0x0),_0x3e5d0d[_0x19f1ac(0x23a)]();if(velocityData[_0x19f1ac(0x272)]>0x1){const _0x5598d3=scenarios[currentScenario];let _0x14dd5b=0x0;for(let _0x5d7144=0x0;_0x5d7144<_0x5598d3[_0x19f1ac(0x1e5)][_0x19f1ac(0x272)];_0x5d7144++){const _0x523adf=_0x5598d3[_0x19f1ac(0x1e5)][_0x5d7144],_0x27c1a7=_0x14dd5b,_0x5d6603=_0x14dd5b+_0x523adf[_0x19f1ac(0x263)];let _0x42843e;if(_0x523adf[_0x19f1ac(0x1f6)]===_0x19f1ac(0x1ce))_0x42843e=_0x19f1ac(0x242);else _0x523adf[_0x19f1ac(0x1f6)]===_0x19f1ac(0x27e)?_0x42843e=_0x19f1ac(0x204):_0x42843e='#e74c3c';_0x3e5d0d[_0x19f1ac(0x1e2)]=_0x42843e,_0x3e5d0d[_0x19f1ac(0x245)]=0x3,_0x3e5d0d['beginPath']();let _0x35a1b8=!![];for(let _0x3962c6=0x0;_0x3962c6<velocityData[_0x19f1ac(0x272)];_0x3962c6++){const _0x168a87=velocityData[_0x3962c6];if(_0x168a87[_0x19f1ac(0x1f2)]>=_0x27c1a7&&_0x168a87[_0x19f1ac(0x1f2)]<=_0x5d6603){const _0x22e80a=0x3c+_0x168a87[_0x19f1ac(0x1f2)]/0xa*(_0x3f3e48-0x50),_0x365ab2=_0xf100bc-0x28-_0x168a87[_0x19f1ac(0x230)]/0x14*(_0xf100bc-0x3c);_0x35a1b8?(_0x3e5d0d[_0x19f1ac(0x1f0)](_0x22e80a,_0x365ab2),_0x35a1b8=![]):_0x3e5d0d[_0x19f1ac(0x1df)](_0x22e80a,_0x365ab2);}}_0x3e5d0d[_0x19f1ac(0x23f)](),_0x14dd5b+=_0x523adf[_0x19f1ac(0x263)];}if(!_0x24a67d[_0x19f1ac(0x26b)]&&velocityData[_0x19f1ac(0x272)]>0x0){const _0x4c4055=velocityData[velocityData[_0x19f1ac(0x272)]-0x1],_0x2fab98=0x3c+_0x4c4055[_0x19f1ac(0x1f2)]/0xa*(_0x3f3e48-0x50),_0x165e21=_0xf100bc-0x28-_0x4c4055[_0x19f1ac(0x230)]/0x14*(_0xf100bc-0x3c);_0x3e5d0d[_0x19f1ac(0x278)]=_0x19f1ac(0x297),_0x3e5d0d[_0x19f1ac(0x28c)](),_0x3e5d0d[_0x19f1ac(0x25c)](_0x2fab98,_0x165e21,0x5,0x0,Math['PI']*0x2),_0x3e5d0d[_0x19f1ac(0x27a)]();}}}function updateUI(){}function getTotalDuration(){const _0x1f391c=_0x51a3df;return scenarios[currentScenario][_0x1f391c(0x1e5)][_0x1f391c(0x292)]((_0x437164,_0x5ea558)=>_0x437164+_0x5ea558[_0x1f391c(0x263)],0x0);}let lastFrameTs=null;function animate(_0x2d91ed){const _0x481baf=_0x51a3df;let _0xaac794=0x0;lastFrameTs!==null&&_0x2d91ed!==undefined&&(_0xaac794=Math['max'](0x0,Math[_0x481baf(0x1ec)]((_0x2d91ed-lastFrameTs)/0x3e8,0.1)));if(_0x2d91ed!==undefined)lastFrameTs=_0x2d91ed;if(running&&!paused){const _0x26d537=getTotalDuration();time=Math[_0x481baf(0x1ec)](time+_0xaac794*animationSpeed,_0x26d537);const _0x1184c4=calculateMotion(time);velocity=_0x1184c4[_0x481baf(0x230)],distance=_0x1184c4[_0x481baf(0x1f3)],velocityData[_0x481baf(0x214)]({'time':time,'velocity':velocity});while(lastPhotoTime+photoInterval<=time+1e-9){lastPhotoTime+=photoInterval;const _0x9b9aa7=calculateMotion(lastPhotoTime),_0x97285b=Math[_0x481baf(0x1ec)](_0x9b9aa7[_0x481baf(0x1f3)]*0x8,chronoCanvas[_0x481baf(0x1d7)]-0x32);photos[_0x481baf(0x214)]({'x':_0x97285b,'velocity':_0x9b9aa7[_0x481baf(0x230)]});}time>=_0x26d537&&(running=![]);}drawChronophotography(),drawGraph(),updateUI(),requestAnimationFrame(animate);}const EXPORT_SCALE=0x3,A4={'w':0x9b0,'h':0xdb4,'margin':0x76,'gap':0x2f},MAX_MODE_MIN_WIDTH=0x427;function fmtNum(_0x557b87,_0x1e8678){return String(parseFloat(_0x557b87['toFixed'](_0x1e8678)));}function newExportCanvas(_0x49dfd8,_0x11cd78,_0x12fdfc){const _0x7ae11d=_0x51a3df,_0x492901=document[_0x7ae11d(0x25f)](_0x7ae11d(0x248));_0x492901[_0x7ae11d(0x1d7)]=Math[_0x7ae11d(0x1e9)](_0x49dfd8*_0x12fdfc),_0x492901[_0x7ae11d(0x21a)]=Math[_0x7ae11d(0x1e9)](_0x11cd78*_0x12fdfc);const _0x317c49=_0x492901[_0x7ae11d(0x26a)]('2d');return _0x317c49[_0x7ae11d(0x203)](_0x12fdfc,_0x12fdfc),_0x317c49['direction']=_0x7ae11d(0x1d9),_0x317c49[_0x7ae11d(0x278)]=_0x7ae11d(0x281),_0x317c49[_0x7ae11d(0x225)](0x0,0x0,_0x49dfd8,_0x11cd78),{'c':_0x492901,'ctx':_0x317c49};}function renderGraphBlock(_0x118d52,_0x15a4fc=!![]){const _0x297c6c=_0x51a3df,_0x1aac85=0x2d0,_0xdd76f8=0x190,_0x94e98c=0x1e,_0x2a6ce5=0xc,_0x147746=0xa,_0x1261f7=_0x15a4fc?_0xdd76f8+_0x2a6ce5+_0x94e98c*0x2+_0x147746:_0xdd76f8,{c:_0x2a53b0,ctx:_0xa6b29a}=newExportCanvas(_0x1aac85,_0x1261f7,_0x118d52);drawGraph(_0xa6b29a,_0x1aac85,_0xdd76f8,{'noClear':!![],'noMarker':!![]});if(!_0x15a4fc)return _0x2a53b0;const _0x144bca=photos[_0x297c6c(0x272)],_0x57088c=0x68,_0x1077d5=0xa,_0xa4a808=_0xdd76f8+_0x2a6ce5,_0xc16219=(_0x1aac85-0x14-_0x57088c)/_0x144bca,_0x1ca8e4=_0xc16219<0x22?0xc:0xd,_0x29b193=[{'label':_0x297c6c(0x1ea),'vals':photos[_0x297c6c(0x28f)]((_0x2c69c4,_0x5ef8a4)=>fmtNum(_0x5ef8a4*photoInterval,0x2))},{'label':_0x297c6c(0x1fa),'vals':photos[_0x297c6c(0x28f)](_0x17cc1e=>fmtNum(_0x17cc1e[_0x297c6c(0x230)],0x1))}];return _0xa6b29a['lineWidth']=1.5,_0xa6b29a[_0x297c6c(0x1e2)]=_0x297c6c(0x1f9),_0xa6b29a[_0x297c6c(0x227)]=_0x297c6c(0x2ad),_0xa6b29a[_0x297c6c(0x268)]=_0x297c6c(0x275),_0x29b193[_0x297c6c(0x223)]((_0x5cf211,_0xe2ce0)=>{const _0x2b0bd7=_0x297c6c,_0x31b995=_0xa4a808+_0xe2ce0*_0x94e98c;_0xa6b29a[_0x2b0bd7(0x278)]=_0x2b0bd7(0x1da),_0xa6b29a['fillRect'](_0x1077d5,_0x31b995,_0x57088c,_0x94e98c),_0xa6b29a[_0x2b0bd7(0x290)](_0x1077d5,_0x31b995,_0x57088c,_0x94e98c),_0xa6b29a[_0x2b0bd7(0x278)]=_0x2b0bd7(0x1db),_0xa6b29a[_0x2b0bd7(0x1f4)]=_0x2b0bd7(0x285),_0xa6b29a[_0x2b0bd7(0x1cf)](_0x5cf211[_0x2b0bd7(0x1cc)],_0x1077d5+_0x57088c/0x2,_0x31b995+_0x94e98c/0x2+0x1),_0x5cf211[_0x2b0bd7(0x288)][_0x2b0bd7(0x223)]((_0x5116c0,_0x3bedf0)=>{const _0x490c83=_0x2b0bd7,_0x33ff77=_0x1077d5+_0x57088c+_0x3bedf0*_0xc16219;_0xa6b29a[_0x490c83(0x278)]=_0x490c83(0x281),_0xa6b29a[_0x490c83(0x225)](_0x33ff77,_0x31b995,_0xc16219,_0x94e98c),_0xa6b29a['strokeRect'](_0x33ff77,_0x31b995,_0xc16219,_0x94e98c),_0xa6b29a[_0x490c83(0x278)]=_0x490c83(0x1db),_0xa6b29a['font']=_0x490c83(0x1dd)+_0x1ca8e4+_0x490c83(0x295),_0xa6b29a[_0x490c83(0x1cf)](_0x5116c0,_0x33ff77+_0xc16219/0x2,_0x31b995+_0x94e98c/0x2+0x1);});}),_0xa6b29a['textBaseline']=_0x297c6c(0x287),_0x2a53b0;}function renderPositionsBlock(_0xbe7a7a){const _0x51392a=_0x51a3df,_0x140248=0x96;let _0x1a09f7=0x0;photos[_0x51392a(0x223)](_0x3deac8=>{const _0xd463d8=_0x51392a;_0x1a09f7=Math[_0xd463d8(0x284)](_0x1a09f7,_0x3deac8['x']+0x16,_0x3deac8['x']+0xb+_0x3deac8[_0xd463d8(0x230)]*0x2);});const _0x3730b1=Math[_0x51392a(0x1ec)](0x384,Math[_0x51392a(0x284)](0x1c2,Math['ceil'](_0x1a09f7/0x50)*0x50+0x32)),{c:_0x69435b,ctx:_0x71d60b}=newExportCanvas(_0x3730b1,_0x140248,_0xbe7a7a);return drawChronophotography(_0x71d60b,_0x3730b1,_0x140248,{'noClear':!![],'photosOnly':!![]}),_0x69435b;}function bestGrid(_0x4ec6c6,_0x5cb8c8){const _0x40e718=_0x51a3df,_0x55aa49=A4['w']-0x2*A4[_0x40e718(0x26e)],_0x517418=A4['h']-0x2*A4[_0x40e718(0x26e)];let _0x5d8e75=null;for(let _0x3e337f=0x1;_0x3e337f<=_0x4ec6c6;_0x3e337f++){const _0x5cba5a=Math[_0x40e718(0x29c)](_0x4ec6c6/_0x3e337f),_0x73e157=(_0x55aa49-(_0x3e337f-0x1)*A4[_0x40e718(0x29a)])/_0x3e337f,_0x3caafb=(_0x517418-(_0x5cba5a-0x1)*A4[_0x40e718(0x29a)])/_0x5cba5a,_0x2029ff=Math[_0x40e718(0x1ec)](_0x73e157,_0x3caafb*_0x5cb8c8);if(!_0x5d8e75||_0x2029ff>_0x5d8e75['w']+0.5)_0x5d8e75={'cols':_0x3e337f,'rows':_0x5cba5a,'w':_0x2029ff,'h':_0x2029ff/_0x5cb8c8};}return _0x5d8e75;}function maxCopies(_0x37b529){let _0x118d5f=0x1;for(let _0x359ad1=0x1;_0x359ad1<=0x3c;_0x359ad1++){if(bestGrid(_0x359ad1,_0x37b529)['w']>=MAX_MODE_MIN_WIDTH)_0x118d5f=_0x359ad1;}return _0x118d5f;}function composeSheet(_0x240d38,_0x1b5720){const _0xd9fafc=_0x51a3df,_0x4aaa29=bestGrid(_0x1b5720,_0x240d38[_0xd9fafc(0x1d7)]/_0x240d38['height']),_0x4d6a10=document[_0xd9fafc(0x25f)](_0xd9fafc(0x248));_0x4d6a10[_0xd9fafc(0x1d7)]=A4['w'],_0x4d6a10[_0xd9fafc(0x21a)]=A4['h'];const _0x522161=_0x4d6a10[_0xd9fafc(0x26a)]('2d');_0x522161[_0xd9fafc(0x278)]=_0xd9fafc(0x281),_0x522161[_0xd9fafc(0x225)](0x0,0x0,A4['w'],A4['h']),_0x522161['imageSmoothingEnabled']=!![],_0x522161[_0xd9fafc(0x2b0)]='high';const _0xbb6b11=_0x4aaa29[_0xd9fafc(0x231)]*_0x4aaa29['w']+(_0x4aaa29[_0xd9fafc(0x231)]-0x1)*A4[_0xd9fafc(0x29a)],_0x28ca1d=(A4['w']-_0xbb6b11)/0x2;for(let _0x30bede=0x0;_0x30bede<_0x1b5720;_0x30bede++){const _0x53cd46=Math[_0xd9fafc(0x2a2)](_0x30bede/_0x4aaa29[_0xd9fafc(0x231)]),_0x187e6d=_0x30bede%_0x4aaa29[_0xd9fafc(0x231)];_0x522161[_0xd9fafc(0x216)](_0x240d38,_0x28ca1d+_0x187e6d*(_0x4aaa29['w']+A4[_0xd9fafc(0x29a)]),A4[_0xd9fafc(0x26e)]+_0x53cd46*(_0x4aaa29['h']+A4['gap']),_0x4aaa29['w'],_0x4aaa29['h']);}return _0x4d6a10;}function buildExport(_0x28faa0,_0xf7f96a,_0x209fd4=!![]){const _0x29885f=_0x51a3df;if(photos[_0x29885f(0x272)]===0x0)return null;const _0x339c6a=_0x28faa0===_0x29885f(0x1ee)?renderGraphBlock(EXPORT_SCALE,_0x209fd4):renderPositionsBlock(EXPORT_SCALE);let _0x448032,_0x44a5a0;_0xf7f96a==='1'?(_0x448032=_0x339c6a,_0x44a5a0=0x1):(_0x44a5a0=_0xf7f96a==='9'?0x9:maxCopies(_0x339c6a[_0x29885f(0x1d7)]/_0x339c6a[_0x29885f(0x21a)]),_0x448032=composeSheet(_0x339c6a,_0x44a5a0));const _0x47e7b2=_0x28faa0===_0x29885f(0x1ee)?'graph':_0x29885f(0x282),_0x23533e=_0xf7f96a==='1'?_0x47e7b2+'_'+currentScenario+_0x29885f(0x250):_0x47e7b2+'_'+currentScenario+_0x29885f(0x1ed)+_0x44a5a0+_0x29885f(0x254);return{'canvas':_0x448032,'count':_0x44a5a0,'name':_0x23533e};}function downloadBlob(_0xa866f3,_0x314a1b){const _0x154c7f=_0x51a3df,_0x8d1522=URL['createObjectURL'](_0xa866f3),_0x128f5b=document[_0x154c7f(0x25f)]('a');_0x128f5b[_0x154c7f(0x235)]=_0x8d1522,_0x128f5b[_0x154c7f(0x2b4)]=_0x314a1b,document[_0x154c7f(0x289)]['appendChild'](_0x128f5b),_0x128f5b[_0x154c7f(0x2b2)](),_0x128f5b[_0x154c7f(0x219)](),setTimeout(()=>URL[_0x154c7f(0x1e3)](_0x8d1522),0x2710);}function downloadCanvas(_0x16505e,_0x16757d){return new Promise((_0x3bc186,_0x4498cc)=>{const _0x1167a4=_0x54bc;_0x16505e['toBlob'](_0x4b3975=>{const _0xd6d712=_0x54bc;if(!_0x4b3975){_0x4498cc(new Error(_0xd6d712(0x20b)));return;}const _0x4ad1b2=URL[_0xd6d712(0x1eb)](_0x4b3975),_0x394364=document[_0xd6d712(0x25f)]('a');_0x394364[_0xd6d712(0x235)]=_0x4ad1b2,_0x394364[_0xd6d712(0x2b4)]=_0x16757d,document[_0xd6d712(0x289)][_0xd6d712(0x1d5)](_0x394364),_0x394364['click'](),_0x394364[_0xd6d712(0x219)](),setTimeout(()=>URL['revokeObjectURL'](_0x4ad1b2),0x2710),_0x3bc186();},_0x1167a4(0x2a0));});}const MM_EMU=0x8ca0,TW_PER_MM=0x5a0/25.4,WORD_USABLE={'w':0xbe,'h':0x10e},WORD_MIN_WIDTH=0x5a,WORD_MAX_WIDTH=0xaa,DOCX_MIME=_0x51a3df(0x1ca);function tw(_0x5f5400){const _0x4a0601=_0x51a3df;return Math[_0x4a0601(0x1e9)](_0x5f5400*TW_PER_MM);}function clampNum(_0x320400,_0x3dc7ba,_0x1a098f){const _0x293ba7=_0x51a3df;return Math[_0x293ba7(0x284)](_0x3dc7ba,Math[_0x293ba7(0x1ec)](_0x1a098f,_0x320400));}function _0x54bc(_0x2493c8,_0x5430b0){_0x2493c8=_0x2493c8-0x1ca;const _0x562cb3=_0x562c();let _0x54bc62=_0x562cb3[_0x2493c8];if(_0x54bc['HtRvib']===undefined){var _0x3d0215=function(_0x2a24e9){const _0x56b103='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=';let _0x569d2a='',_0x23ae09='';for(let _0x1d0ddf=0x0,_0xac4275,_0x208c30,_0x510eb8=0x0;_0x208c30=_0x2a24e9['charAt'](_0x510eb8++);~_0x208c30&&(_0xac4275=_0x1d0ddf%0x4?_0xac4275*0x40+_0x208c30:_0x208c30,_0x1d0ddf++%0x4)?_0x569d2a+=String['fromCharCode'](0xff&_0xac4275>>(-0x2*_0x1d0ddf&0x6)):0x0){_0x208c30=_0x56b103['indexOf'](_0x208c30);}for(let _0x283eb0=0x0,_0x4380f1=_0x569d2a['length'];_0x283eb0<_0x4380f1;_0x283eb0++){_0x23ae09+='%'+('00'+_0x569d2a['charCodeAt'](_0x283eb0)['toString'](0x10))['slice'](-0x2);}return decodeURIComponent(_0x23ae09);};_0x54bc['nZRARZ']=_0x3d0215,_0x54bc['TXiCuY']={},_0x54bc['HtRvib']=!![];}const _0x5644dd=_0x562cb3[0x0];_0x54bc['igFbNz']!==_0x5644dd&&(_0x54bc['TXiCuY']={},_0x54bc['igFbNz']=_0x5644dd);const _0x5073cb=_0x54bc['TXiCuY'][_0x2493c8];return _0x5073cb===undefined?(_0x54bc62=_0x54bc['nZRARZ'](_0x54bc62),_0x54bc['TXiCuY'][_0x2493c8]=_0x54bc62):_0x54bc62=_0x5073cb,_0x54bc62;}function _0x562c(){const _0x13f8ee=['pc9szwXHDgLVBNnOAxbZpG','phC6Dcb4BwW6C3bHy2u9iNbYzxnLCNzLiJ4','Dg9cBg9I','CgHVDg9jBNrLCNzHBa','ihC6DMfSpsjZAw5NBguIihC6C3O9iJqIihC6C3bHy2u9iJaIihC6y29SB3i9iJm0ndK1rsiVpG','C2f2zu5VDgu','phDWoMnoDKDYyxbOAwngCMfTzvbYpJXHoMDYyxbOAwngCMfTzuXVy2TZig5Vq2HHBMDLqxnWzwn0psiXiI8+pc93CdPJtNzhCMfWAgLJrNjHBwvqCJ4','BMfTzq','phC6Cd48DZPWuhi+phC6C3bHy2LUzYb3oMjLzM9Yzt0ImciGDZPHzNrLCJ0ImciGDZPSAw5LpsiYmciGDZPSAw5LuNvSzt0IzxHHy3qIlZ48DZPYuhi+phC6C3OGDZP2ywW9iJiIlZ48DZPZEKnZihC6DMfSpsiYiI8+pc93oNjqCJ48l3C6CfbYpJWVDZPWpG','BgvMDa','i2uWztbLma','ChvZAa','oeXzD1rMwG','zhjHD0LTywDL','iIbUyw1LpsjqAwn0DxjLia','mJm1uLnXBxbr','CMvTB3zL','AgvPz2H0','pc93oNrJpG','C2f2zunVCgLLCW','y2XVC2vqyxrO','Aw5ZAwrLsa','zw5JB2rL','C2f2zvrHyMXL','D29Yzc9FCMvSCY9KB2n1BwvUDc54BwWUCMvSCW','pd94BwWGDMvYC2LVBJ0Ims4WiIbLBMnVzgLUzZ0IvvrgltGIihn0yw5KywXVBMu9iNLLCYi/pG','zM9YrwfJAa','C2f2zuDV','zMLSBfjLy3q','iIbUyw1LpsjPBwfNzq','Dgv4DejHC2vSAw5L','yM9SzcaXnhb4iefYAwfS','pc93oNrIBd4','BM9dBgvHCG','iZi3ywu2ma','phC6DgjSr3jPzd4','iI8+','AM9PBG','phC6CNrSlZ4','DMvSB2nPDhK','y29SCW','iIb3oMHsDwXLpsjLEgfJDciVpJWVDZP0CLbYpG','pfjLBgf0Aw9UC2HPCcbjzd0ICKLKmsiGvhLWzt0IAhr0CdOVl3nJAgvTyxmUB3bLBNHTBgzVCM1HDhmUB3jNl29MzMLJzurVy3vTzw50lZiWmdyVCMvSyxrPB25ZAgLWCY9VzMzPy2veB2n1BwvUDciGvgfYz2v0psj3B3jKl2rVy3vTzw50lNHTBciVpG','zgf0yq','AhjLzG','C2f2zvDOyxq','y2HHBMDL','pfjLBgf0Aw9UC2HPCcbjzd0ICKLKmsiGvhLWzt0IAhr0CdOVl3nJAgvTyxmUB3bLBNHTBgzVCM1HDhmUB3jNl29MzMLJzurVy3vTzw50lZiWmdyVCMvSyxrPB25ZAgLWCY9PBwfNzsiGvgfYz2v0psjTzwrPys9PBwfNzteUCg5NiI8+','D29Yzc9KB2n1BwvUDc54BwW','CMvZDg9Yzq','CM90yxrL','pc93oNrYpG','iIb3oNr5Cgu9iMr4ysiVpJX3oMPJihC6DMfSpsjJzw50zxiIlZ48DZP0yMXcB3jKzxjZpG','iIbJEt0I','C3rYB2TL','pc93oNa+','2kRyUDIW2zhySsdyP9Me2k3zGDI4inI52ytzIsdzH9IW2kCG2kFzHnMf2kRyTDMb2k0U','iZjLy2m3mq','D29Yzc9TzwrPys9PBwfNzteUCg5N','mtCYnJC0ouTOA0LcAW','BgLUzvDPzhrO','pc93oNrIBeDYAwq+','iZK1ytvHnG','y2fUDMfZ','BwvHC3vYzvrLEhq','z2v0rwXLBwvUDej5swq','mJeWnJe4wKj0D3nk','Dgv4DenVBNrLBNq','pc93oNjqCJ4','pfr5CgvZihHTBg5ZpsjODhrWoI8VC2nOzw1HCY5VCgvUEg1SzM9YBwf0CY5VCMCVCgfJA2fNzs8Ymda2l2nVBNrLBNqTDhLWzxmIpG','pc9WAwm6CgLJpJWVytPNCMfWAgLJrgf0yt48l2e6z3jHCgHPyZ48l3DWoMLUBgLUzt48l3C6zhjHD2LUzZ48l3C6CJ4','x3GXlNbUzW','Aw5ZAwrLvG','phC6C2HKihC6DMfSpsjJBgvHCIiGDZPJB2XVCJ0Iyxv0BYiGDZPMAwXSpsi','pc93oNrIBejVCMrLCNm+','lNbUzW','Eg1SBNm6yt0IAhr0CdOVl3nJAgvTyxmUB3bLBNHTBgzVCM1HDhmUB3jNl2rYyxDPBMDTBc8Ymda2l21HAw4Iia','mJqWnLLlCvrcsq','iZi5odbIoq','iI8+phDWoMrVy1bYigLKpsi','2kFzHnIY2yxzHIaOCYK','Dg9gAxHLza','perLzMf1BhqGrxH0zw5ZAw9UpsjWBMCIienVBNrLBNruExbLpsjPBwfNzs9WBMCIlZ4','yxjJ','ywrKrxzLBNrmAxn0zw5LCG','phbPyZPIBgLWrMLSBd48ytPIBgLWihi6zw1Izwq9iNjjzdeIlZ48ytPZDhjLDgnOpJXHoMzPBgXszwn0lZ48l2e6C3rYzxrJAd48l3bPyZPIBgLWrMLSBd4','y3jLyxrLrwXLBwvUDa','ig0VCW','mty3mty3mMXJwLzAyG','pc93oNq+pc93oNi+pc93oNa+pc93oNrJpG','zhvYyxrPB24','2k3ySDMd2kKG2yxyQTIO2kFyT9IM2kK','zgvJzwXLCMf0Aw5N','phC6DgjSr3jPzd48DZPNCMLKq29SihC6DZ0I','phC6CJ48DZPKCMf3Aw5NpJX3CdPPBMXPBMuGzgLZDfq9iJaIigrPC3rcpsiWiIbKAxn0td0ImciGzgLZDfi9iJaIpG','Dgv4DefSAwDU','perLzMf1BhqGrxH0zw5ZAw9Upsj4BwWIienVBNrLBNruExbLpsjHChbSAwnHDgLVBI94BwWIlZ4','z2v0q29UDgv4Da','BM9nyxjRzxi','C2f2zu92zxjSyxK','Dg9W','BwfYz2LU','y2XHC3noyw1L','iIb3oNr5Cgu9iMr4ysiVpJX3oNzbBgLNBIb3oNzHBd0IDg9WiI8+pc93oNrJuhi+','phC6Cd48DZPWuhi+phC6yMLKAs8+phC6C3bHy2LUzYb3oMjLzM9Yzt0ImciGDZPHzNrLCJ0ImciVpJX3oMPJihC6DMfSpsjJzw50zxiIlZ48l3C6CfbYpG','BgvUz3rO','lMrVy3G','CM93CW','y2vUDgvY','CMvWzwf0','phC6','zMLSBfn0EwXL','A2v5zg93BG','zMLSBa','iIb3oNr5Cgu9iMr4ysiVpJX3oMPJihC6DMfSpsjJzw50zxiIlZ48DZP0yMXmyxLVDxqGDZP0ExbLpsjMAxHLzciVpG','CM93','phC6DgjSq2vSBe1HCJ48DZP0B3aGDZP3psiWiIb3oNr5Cgu9iMr4ysiVpJX3oMXLzNqGDZP3psiWiIb3oNr5Cgu9iMr4ysiVpJX3oMjVDhrVBsb3oNC9iJaIihC6DhLWzt0IzhHHiI8+phC6CMLNAhqGDZP3psiWiIb3oNr5Cgu9iMr4ysiVpJWVDZP0yMXdzwXStwfYpJWVDZP0yMXqCJ4','Dw5PzM9YBq','C2f2zvrHyMXLuM93','DIa9ia','i2zMzMzMzG','Cg9ZAxrPB25Z','pfjLBgf0Aw9UC2HPChmGEg1SBNm9iMH0Dha6lY9Zy2HLBwfZlM9Wzw54BwXMB3jTyxrZlM9YzY9WywnRywDLlZiWmdyVCMvSyxrPB25ZAgLWCYi+','Bwf4','yM9SzcaXm3b4iefYAwfS','C3bLzwq','ywXWAgfIzxrPyW','DMfSCW','yM9KEq','z2XVyMfSqwXWAge','y2HLy2TLza','yMvNAw5qyxrO','CMLNAhq','phC6z3jPzenVBcb3oNC9iG','BwfW','C3rYB2TLuMvJDa','2kFzHnIZ2lhyUDIPicHTl3mP','CMvKDwnL','pge6z3jHCgHPyZ48ytPNCMfWAgLJrgf0ysb1CMK9iMH0Dha6lY9Zy2HLBwfZlM9Wzw54BwXMB3jTyxrZlM9YzY9KCMf3Aw5NBwWVmJaWnI9WAwn0DxjLiJ48CgLJoNbPyZ4','phC6C3OGDZP2ywW9iG','ChGGqxjPywW','mtjoDfv1Bee','i2u3ngmZyW','mtK5ndy5mfD6twPVwq','yM90Dg9T','z2fW','C2f2zuj0BG','y2vPBa','zg9JEa','Cgf1C2vcDg4','rxnJyxbL','Aw1Hz2uVCg5N','ig9R','zMXVB3i','C3rVChbLza','iIb3oMHsDwXLpsjHDeXLyxn0iI8+pc93oNrYuhi+','DhjHBNnSyxrL','mtjWEcbbCMLHBa','iZDMogm4za','rungmeyX','A2v5','iI8+phC6C3PdCYb3oNzHBd0I','2kRzHsdyP9Me2k3zGDI4oIa','2k3ySDMd2kKG2yxzHTIQ2lJzHDIP','BwLKzgXL','2yByS9IU','phC6DgjSpJX3oNrIBfbYpJX3oNrIBfCGDZP3psi','Aw1Hz2vtBw9VDgHPBMDrDwfSAxr5','phC6BM9xCMfWlZ48DZP2qwXPz24GDZP2ywW9iMnLBNrLCIiVpJWVDZP0y1bYpG','y2XPy2S','y291BNq','zg93BMXVywq','pe92zxjYAwrLifbHCNroyw1LpsiVD29Yzc9KB2n1BwvUDc54BwWIienVBNrLBNruExbLpsjHChbSAwnHDgLVBI92BMqUB3bLBNHTBgzVCM1HDhmTB2zMAwnLzg9JDw1LBNqUD29YzhbYB2nLC3nPBMDTBc5KB2n1BwvUDc5TywLUk3HTBciVpG','pc93oMjVzhK+pc93oMrVy3vTzw50pG','phC6Dgm+phC6DgnqCJ48DZP0y1CGDZP3psi','w0nVBNrLBNrFvhLWzxnDlNHTBa','CgHVDg9Zt25SEq','Eg1SBNm6D3a9iMH0Dha6lY9Zy2HLBwfZlM9Wzw54BwXMB3jTyxrZlM9YzY9KCMf3Aw5NBwWVmJaWnI93B3jKChjVy2vZC2LUz0rYyxDPBMCIia','phbPyZPUDLbPy1bYpJXWAwm6y052uhiGAwq9iG','phC6DgjStgf5B3v0ihC6DhLWzt0IzML4zwqIlZ48DZP0yMXdzwXStwfYpJX3oMXLzNqGDZP3psiXnsiGDZP0ExbLpsjKEgeIlZ48DZPYAwDODcb3oNC9iJe1iIb3oNr5Cgu9iMr4ysiVpJWVDZP0yMXdzwXStwfYpJWVDZP0yMXqCJ4','igvYCM9Y','yxbWBgLJyxrPB24VDM5KlM9Wzw54BwXMB3jTyxrZlw9MzMLJzwrVy3vTzw50lNDVCMrWCM9JzxnZAw5NBwWUzg9JDw1LBNq','2yByS9IU2kK','BgfIzwW','phDWoMv4DgvUDcbJEd0I','ywnJzwXLCMf0Aw5N','zMLSBfrLEhq','CMvZzxrcDg4','pc9uExbLCZ4','2kRyS9IN2lhyUsdyQ9MfinIQ2kJyP9I32kq','iIb3oNr5Cgu9iMr4ysiVpG','C2f2zuzVCM1HDa','yxbWzw5Kq2HPBgq','phC6zg9JDw1LBNqGEg1SBNm6DZ0IAhr0CdOVl3nJAgvTyxmUB3bLBNHTBgzVCM1HDhmUB3jNl3DVCMrWCM9JzxnZAw5NBwWVmJaWnI9TywLUiIa','D2LKDgG','nZDRtvbUBKi','CNrS','i2vJzJbMmq','iZjJm2u1ma','phC6C2vJDfbYpJX3oNbNu3OGDZP3psiXmtKWnIiGDZPOpsiXnJGZociVpJX3oNbNtwfYihC6Dg9Wpsi1nJCIihC6CMLNAhq9iJu2nYiGDZPIB3r0B209iJu2nYiGDZPSzwz0psi1nJCIihC6AgvHzgvYpsiWiIb3oMzVB3rLCJ0ImciGDZPNDxr0zxi9iJaIlZ48l3C6C2vJDfbYpG','yM9Szca','2ltyUTMr2yqG2kFzHnMf2k3yP9Md2kFyQsdyO9Mi2ytyP9MlinIT2kRzIsdyQTMp2ytyQTMc2lCG2kFzHnI12yJySDIminIR2yuG2kFyRDMb2lGU','BgLUzvrV','nurUvgnuvq','lNbUzYiVpJXWAwm6y052ugLJuhiVpJWVCgLJoM52ugLJuhi+','C3rYB2TLu3r5Bgu','CMv2B2TLt2jQzwn0vvjm','Bw9KywWTBM90zq','CgHHC2vZ','phC6Dhi+phC6DhjqCJ48DZP0CKHLAwDODcb3oNzHBd0I','Eg1SBNm6CgLJpsjODhrWoI8VC2nOzw1HCY5VCgvUEg1SzM9YBwf0CY5VCMCVzhjHD2LUz21SlZiWmdyVCgLJDhvYzsi+phC6yM9KEt4','mtC4ndq4ou1su3zdEq','CM91BMq','2kFzHnIY2yxzHIb0icHZkq','y3jLyxrLt2jQzwn0vvjm','BwLU','x0e0x3G','z3jHCgG','y2vSBeG','Bw92zvrV','AgLKzgvU','DgLTzq','zgLZDgfUy2u','zM9UDa','DMfSDwu','DhLWzq','phC6Cd48DZPWuhi+phC6C3bHy2LUzYb3oMjLzM9Yzt0ImciGDZPHzNrLCJ0ImciVpJWVDZPWuhi+pc93oNa+','C3rHCNrcDg4','iZm0ndK1zq','2kFzHnIZ2lhyUDIPihyGkg0VCYK','perLzMf1BhqGrxH0zw5ZAw9UpsjYzwXZiIbdB250zw50vhLWzt0IyxbWBgLJyxrPB24VDM5KlM9Wzw54BwXMB3jTyxrZlxbHy2THz2uUCMvSyxrPB25ZAgLWCYT4BwWIlZ4','C2f2zq','C2f2zunHBMnLBa','mty3nZC4BwnktwTo','y2HYB25Vq2fUDMfZ','phC6Dhi+phC6DhjqCJ48DZPJyw50u3bSAxqVpJX3oNrYsgvPz2H0ihC6DMfSpsi','x3jLBhmVlNjLBhm','yM9SzcaXmhb4iefYAwfS','C2nHBgu','iZm0otHKyG','2k3ySDMd2kKG2yxySDMd2kJyQq','y2XLyxjszwn0','phC6Cd48DZPWuhi+phC6C3bHy2LUzYb3oMjLzM9Yzt0ImciGDZPHzNrLCJ0ImciVpJX3oMPJihC6DMfSpsjJzw50zxiIlZ48l3C6CfbYpG','DgfYz2v0'];_0x562c=function(){return _0x13f8ee;};return _0x562c();}function tableMetrics(_0x3b888e){const _0x7f8303=clampNum(_0x3b888e/0xd,0x6,0xb),_0x27d886=_0x7f8303*0.67;return{'f':_0x7f8303,'row':_0x27d886,'h':0x2*_0x27d886+1.2};}function fitBlockWidth(_0x3ca68a,_0x417aea,_0x24d16b,_0x1ba3f7){const _0x59e366=Math['min'](_0x3ca68a-0x3,WORD_MAX_WIDTH);for(let _0x19e212=_0x59e366;_0x19e212>=0x14;_0x19e212-=0.5){const _0x524896=_0x19e212/_0x24d16b+(_0x1ba3f7?tableMetrics(_0x19e212)['h']:0x0)+0x3;if(_0x524896<=_0x417aea)return _0x19e212;}return 0x0;}function bestWordGrid(_0x344072,_0xef00d3,_0x22c90e){const _0x4871b5=_0x51a3df;let _0x18e91f=null;for(let _0x3292f5=0x1;_0x3292f5<=_0x344072;_0x3292f5++){const _0x19f547=Math[_0x4871b5(0x29c)](_0x344072/_0x3292f5),_0xd47633=WORD_USABLE['w']/_0x3292f5,_0x6ab899=WORD_USABLE['h']/_0x19f547,_0x293e7d=fitBlockWidth(_0xd47633,_0x6ab899,_0xef00d3,_0x22c90e);if(_0x293e7d>(_0x18e91f?_0x18e91f['w']:0x0)+0.01)_0x18e91f={'cols':_0x3292f5,'rows':_0x19f547,'w':_0x293e7d,'cellW':_0xd47633,'cellH':_0x6ab899};}return _0x18e91f||{'cols':0x1,'rows':_0x344072,'w':0x14,'cellW':WORD_USABLE['w'],'cellH':WORD_USABLE['h']/_0x344072};}function maxWordCopies(_0x305a00,_0x6f6f54){let _0x31499a=0x1;for(let _0x10fe15=0x1;_0x10fe15<=0x3c;_0x10fe15++){if(bestWordGrid(_0x10fe15,_0x305a00,_0x6f6f54)['w']>=WORD_MIN_WIDTH)_0x31499a=_0x10fe15;}return _0x31499a;}const XML_TINY_PARA=_0x51a3df(0x211);function xmlPicture(_0xf69014,_0x2541e1,_0x2999e2){const _0x1a3ff7=_0x51a3df,_0x2c43a8=Math[_0x1a3ff7(0x1e9)](_0x2541e1*MM_EMU),_0x4828a8=Math[_0x1a3ff7(0x1e9)](_0x2999e2*MM_EMU);return _0x1a3ff7(0x267)+(_0x1a3ff7(0x1cd)+_0x2c43a8+_0x1a3ff7(0x23e)+_0x4828a8+_0x1a3ff7(0x258)+_0xf69014+_0x1a3ff7(0x217)+_0xf69014+_0x1a3ff7(0x22d))+_0x1a3ff7(0x20f)+_0x1a3ff7(0x293)+(_0x1a3ff7(0x2bb)+_0xf69014+_0x1a3ff7(0x226)+_0xf69014+_0x1a3ff7(0x1e1))+_0x1a3ff7(0x25e)+('<pic:spPr><a:xfrm><a:off\x20x=\x220\x22\x20y=\x220\x22/><a:ext\x20cx=\x22'+_0x2c43a8+_0x1a3ff7(0x23e)+_0x4828a8+'\x22/></a:xfrm><a:prstGeom\x20prst=\x22rect\x22><a:avLst/></a:prstGeom></pic:spPr>')+_0x1a3ff7(0x24f);}function xmlImagePara(_0x130bdb,_0x3ec162,_0x46edbe){const _0x48cb86=_0x51a3df;return _0x48cb86(0x207)+xmlPicture(_0x130bdb,_0x3ec162,_0x46edbe)+_0x48cb86(0x240);}function xmlTc(_0x46e772,_0x159ffb,_0x202e08,_0x308e11,_0x51f876){const _0x23757d=_0x51a3df,_0x11bfca=_0x308e11?_0x23757d(0x252)+_0x308e11+_0x23757d(0x22d):'',_0x1de001='<w:rPr><w:rFonts\x20w:ascii=\x22Arial\x22\x20w:hAnsi=\x22Arial\x22\x20w:cs=\x22Arial\x22/><w:b/><w:bCs/>'+(_0x23757d(0x294)+_0x202e08+_0x23757d(0x2aa)+_0x202e08+_0x23757d(0x22d))+(_0x51f876?_0x23757d(0x22f):'')+_0x23757d(0x24d);return _0x23757d(0x2b7)+_0x46e772+_0x23757d(0x1d3)+_0x11bfca+_0x23757d(0x2b1)+_0x23757d(0x271)+('<w:r>'+_0x1de001+_0x23757d(0x20a)+_0x159ffb+_0x23757d(0x262));}function xmlValuesTable(_0x4e557e,_0x215dad,_0x55c7d1){const _0x1c54db=_0x51a3df,_0x29cff7=_0x215dad[_0x1c54db(0x272)],_0xa95494=tableMetrics(_0x4e557e),_0x3f67cb=_0xa95494['f']*2.7,_0x415320=(_0x4e557e-_0x3f67cb)/_0x29cff7,_0xce47ed=Math[_0x1c54db(0x284)](..._0x215dad[_0x1c54db(0x28f)](_0x4f1dce=>_0x4f1dce[_0x1c54db(0x272)]),..._0x55c7d1[_0x1c54db(0x28f)](_0xd052aa=>_0xd052aa[_0x1c54db(0x272)])),_0x24b8af=Math[_0x1c54db(0x1ec)](_0xa95494['f'],Math[_0x1c54db(0x284)](0x5,_0x415320/(_0xce47ed*0.1764*1.15))),_0x50a4f3=Math[_0x1c54db(0x1e9)](_0xa95494['f']*0x2),_0x4eae52=Math[_0x1c54db(0x1e9)](_0x24b8af*0x2),_0x2b4ae3=tw(_0x3f67cb),_0xb732ea=tw(_0x415320),_0x53b1e0=tw(_0xa95494[_0x1c54db(0x27c)]),_0x299d17=_0x2b4ae3+_0xb732ea*_0x29cff7,_0x181c1c=_0x1fb363=>_0x1c54db(0x277)+_0x1fb363+_0x1c54db(0x20d),_0x54e8eb=_0x181c1c(_0x1c54db(0x26d))+_0x181c1c(_0x1c54db(0x212))+_0x181c1c(_0x1c54db(0x299))+_0x181c1c(_0x1c54db(0x28d))+_0x181c1c(_0x1c54db(0x21e))+_0x181c1c(_0x1c54db(0x251)),_0x59d108=(_0x15644c,_0x486b8f)=>_0x1c54db(0x1e6)+_0x53b1e0+_0x1c54db(0x232)+xmlTc(_0x2b4ae3,_0x15644c,_0x50a4f3,_0x1c54db(0x2a8),!![])+_0x486b8f['map'](_0x40c4bc=>xmlTc(_0xb732ea,_0x40c4bc,_0x4eae52,null,![]))[_0x1c54db(0x22e)]('')+_0x1c54db(0x23c);return _0x1c54db(0x2af)+_0x299d17+_0x1c54db(0x23d)+_0x54e8eb+_0x1c54db(0x253)+_0x1c54db(0x2bc)+(_0x1c54db(0x266)+_0x2b4ae3+_0x1c54db(0x22d)+(_0x1c54db(0x28e)+_0xb732ea+_0x1c54db(0x22d))[_0x1c54db(0x276)](_0x29cff7)+_0x1c54db(0x246))+_0x59d108(_0x1c54db(0x1ea),_0x215dad)+_0x59d108(_0x1c54db(0x1fa),_0x55c7d1)+_0x1c54db(0x229);}const CRC_TABLE=((()=>{const _0x103948=new Uint32Array(0x100);for(let _0xc1c7b3=0x0;_0xc1c7b3<0x100;_0xc1c7b3++){let _0x251c83=_0xc1c7b3;for(let _0x4f2e65=0x0;_0x4f2e65<0x8;_0x4f2e65++)_0x251c83=_0x251c83&0x1?0xedb88320^_0x251c83>>>0x1:_0x251c83>>>0x1;_0x103948[_0xc1c7b3]=_0x251c83>>>0x0;}return _0x103948;})());function crc32(_0x581d16){const _0x442d2b=_0x51a3df;let _0x543147=0xffffffff;for(let _0x5e2c82=0x0;_0x5e2c82<_0x581d16[_0x442d2b(0x272)];_0x5e2c82++)_0x543147=CRC_TABLE[(_0x543147^_0x581d16[_0x5e2c82])&0xff]^_0x543147>>>0x8;return(_0x543147^0xffffffff)>>>0x0;}function makeZip(_0x8a3389){const _0x19b69d=_0x51a3df,_0x2b78c7=new TextEncoder(),_0x5ca993=_0x38c43f=>[_0x38c43f&0xff,_0x38c43f>>>0x8&0xff],_0x14da27=_0x472ebf=>[_0x472ebf&0xff,_0x472ebf>>>0x8&0xff,_0x472ebf>>>0x10&0xff,_0x472ebf>>>0x18&0xff],_0x5eb95f=[],_0x3c20d3=[];let _0x5aac7a=0x0;_0x8a3389[_0x19b69d(0x223)](_0x2bae56=>{const _0x56af06=_0x19b69d,_0x5e8162=_0x2b78c7[_0x56af06(0x21f)](_0x2bae56[_0x56af06(0x210)]),_0x30aad6=crc32(_0x2bae56[_0x56af06(0x234)]),_0x43b4eb=_0x2bae56[_0x56af06(0x234)][_0x56af06(0x272)],_0x4affe0=new Uint8Array([0x50,0x4b,0x3,0x4,..._0x5ca993(0x14),..._0x5ca993(0x800),..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x5ca993(0x21),..._0x14da27(_0x30aad6),..._0x14da27(_0x43b4eb),..._0x14da27(_0x43b4eb),..._0x5ca993(_0x5e8162[_0x56af06(0x272)]),..._0x5ca993(0x0)]);_0x5eb95f[_0x56af06(0x214)](_0x4affe0,_0x5e8162,_0x2bae56[_0x56af06(0x234)]),_0x3c20d3[_0x56af06(0x214)](new Uint8Array([0x50,0x4b,0x1,0x2,..._0x5ca993(0x14),..._0x5ca993(0x14),..._0x5ca993(0x800),..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x5ca993(0x21),..._0x14da27(_0x30aad6),..._0x14da27(_0x43b4eb),..._0x14da27(_0x43b4eb),..._0x5ca993(_0x5e8162[_0x56af06(0x272)]),..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x14da27(0x0),..._0x14da27(_0x5aac7a)]),_0x5e8162),_0x5aac7a+=_0x4affe0[_0x56af06(0x272)]+_0x5e8162[_0x56af06(0x272)]+_0x43b4eb;});const _0x12b9ad=_0x3c20d3[_0x19b69d(0x292)]((_0x5abda6,_0x42e99a)=>_0x5abda6+_0x42e99a[_0x19b69d(0x272)],0x0),_0x24766f=new Uint8Array([0x50,0x4b,0x5,0x6,..._0x5ca993(0x0),..._0x5ca993(0x0),..._0x5ca993(_0x8a3389[_0x19b69d(0x272)]),..._0x5ca993(_0x8a3389[_0x19b69d(0x272)]),..._0x14da27(_0x12b9ad),..._0x14da27(_0x5aac7a),..._0x5ca993(0x0)]),_0x30ca6b=[..._0x5eb95f,..._0x3c20d3,_0x24766f],_0x38ac82=new Uint8Array(_0x30ca6b[_0x19b69d(0x292)]((_0x220f2b,_0x1e2c46)=>_0x220f2b+_0x1e2c46[_0x19b69d(0x272)],0x0));let _0x1e1b3e=0x0;return _0x30ca6b[_0x19b69d(0x223)](_0x2f8908=>{const _0x28a53f=_0x19b69d;_0x38ac82['set'](_0x2f8908,_0x1e1b3e),_0x1e1b3e+=_0x2f8908[_0x28a53f(0x272)];}),_0x38ac82;}async function buildWordExport(_0x17d5d3,_0x36559e,_0x5a13f5){const _0xce19a3=_0x51a3df;if(photos[_0xce19a3(0x272)]===0x0)return null;const _0x3f7b80=_0x17d5d3===_0xce19a3(0x1ee),_0x2fb861=_0x3f7b80?renderGraphBlock(EXPORT_SCALE,![]):renderPositionsBlock(EXPORT_SCALE),_0x1d9d69=_0x2fb861[_0xce19a3(0x1d7)]/_0x2fb861[_0xce19a3(0x21a)],_0x408478=_0x3f7b80&&_0x5a13f5,_0x2afad9=photos[_0xce19a3(0x28f)]((_0x9d073b,_0x2c8070)=>fmtNum(_0x2c8070*photoInterval,0x2)),_0x232b87=photos[_0xce19a3(0x28f)](_0x5a07bd=>fmtNum(_0x5a07bd['velocity'],0x1)),_0x1adc1d=_0x36559e==='1'?0x1:_0x36559e==='9'?0x9:maxWordCopies(_0x1d9d69,_0x408478),_0x2f8ab0=bestWordGrid(_0x1adc1d,_0x1d9d69,_0x408478);let _0x2dfbdc=0x0;const _0x4a0d65=()=>{const _0x2af632=++_0x2dfbdc;let _0x295e76=xmlImagePara(_0x2af632,_0x2f8ab0['w'],_0x2f8ab0['w']/_0x1d9d69);if(_0x408478)_0x295e76+=xmlValuesTable(_0x2f8ab0['w'],_0x2afad9,_0x232b87)+XML_TINY_PARA;return _0x295e76;};let _0x841f6c;if(_0x1adc1d===0x1){_0x841f6c=_0x4a0d65();if(!_0x408478)_0x841f6c+=XML_TINY_PARA;}else{const _0x37873f=tw(WORD_USABLE['w']/_0x2f8ab0[_0xce19a3(0x231)]),_0x5b1cda=tw(_0x2f8ab0[_0xce19a3(0x1ef)]);let _0x552d91='';for(let _0x1ef9f1=0x0;_0x1ef9f1<_0x2f8ab0[_0xce19a3(0x274)];_0x1ef9f1++){let _0x5418c0='';for(let _0x48ea18=0x0;_0x48ea18<_0x2f8ab0[_0xce19a3(0x231)];_0x48ea18++){const _0x2eedff=_0x1ef9f1*_0x2f8ab0[_0xce19a3(0x231)]+_0x48ea18;_0x5418c0+=_0xce19a3(0x2b7)+_0x37873f+_0xce19a3(0x270)+(_0x2eedff<_0x1adc1d?_0x4a0d65():_0xce19a3(0x1f7))+_0xce19a3(0x21b);}_0x552d91+=_0xce19a3(0x200)+_0x5b1cda+_0xce19a3(0x2a4)+_0x5418c0+_0xce19a3(0x23c);}_0x841f6c=_0xce19a3(0x2af)+_0x37873f*_0x2f8ab0['cols']+_0xce19a3(0x27b)+_0xce19a3(0x27d)+(_0xce19a3(0x22c)+(_0xce19a3(0x28e)+_0x37873f+_0xce19a3(0x22d))[_0xce19a3(0x276)](_0x2f8ab0[_0xce19a3(0x231)])+_0xce19a3(0x246)+_0x552d91+_0xce19a3(0x229))+XML_TINY_PARA;}const _0x1f7e59=_0xce19a3(0x222),_0x3d1d0b=_0x1f7e59+_0xce19a3(0x1d6)+'xmlns:r=\x22http://schemas.openxmlformats.org/officeDocument/2006/relationships\x22\x20'+_0xce19a3(0x2ba)+_0xce19a3(0x255)+_0xce19a3(0x1e7)+_0x841f6c+_0xce19a3(0x1dc)+_0xce19a3(0x2b6),_0x152a00=_0x1f7e59+_0xce19a3(0x24e)+_0xce19a3(0x1fb)+_0xce19a3(0x269)+_0xce19a3(0x25b)+_0xce19a3(0x2b5)+_0xce19a3(0x1d1),_0x5ced2f=_0x1f7e59+_0xce19a3(0x283)+_0xce19a3(0x233)+_0xce19a3(0x209),_0x1a5a80=_0x1f7e59+_0xce19a3(0x283)+_0xce19a3(0x238)+'</Relationships>',_0x5891ac=await new Promise(_0x1ba877=>_0x2fb861[_0xce19a3(0x20b)](_0x1ba877,_0xce19a3(0x2a0))),_0x49547f=new Uint8Array(await _0x5891ac['arrayBuffer']()),_0x4fc357=new TextEncoder(),_0x572f08=makeZip([{'name':_0xce19a3(0x2b8),'data':_0x4fc357[_0xce19a3(0x21f)](_0x152a00)},{'name':_0xce19a3(0x201),'data':_0x4fc357[_0xce19a3(0x21f)](_0x5ced2f)},{'name':_0xce19a3(0x239),'data':_0x4fc357[_0xce19a3(0x21f)](_0x3d1d0b)},{'name':_0xce19a3(0x221),'data':_0x4fc357[_0xce19a3(0x21f)](_0x1a5a80)},{'name':_0xce19a3(0x243),'data':_0x49547f}]),_0x4a6f54=_0x3f7b80?_0xce19a3(0x1ee):_0xce19a3(0x282),_0x5841d5=_0x1adc1d===0x1?_0x4a6f54+'_'+currentScenario+'_x1.docx':_0x4a6f54+'_'+currentScenario+_0xce19a3(0x1ed)+_0x1adc1d+_0xce19a3(0x273);return{'blob':new Blob([_0x572f08],{'type':DOCX_MIME}),'count':_0x1adc1d,'name':_0x5841d5};}function resetSimulation(){running=![],paused=![],time=0x0,distance=0x0,velocity=0x0,lastPhotoTime=0x0,photos=[],velocityData=[],updateUI();}document[_0x51a3df(0x24a)]('scenario')['addEventListener']('change',_0x3f4e13=>{const _0x468a77=_0x51a3df;currentScenario=_0x3f4e13[_0x468a77(0x208)][_0x468a77(0x1f5)],resetSimulation();}),document[_0x51a3df(0x24a)](_0x51a3df(0x286))[_0x51a3df(0x25d)](_0x51a3df(0x237),_0x298bde=>{const _0x5e1df1=_0x51a3df;animationSpeed=parseFloat(_0x298bde[_0x5e1df1(0x208)][_0x5e1df1(0x1f5)]);}),document[_0x51a3df(0x24a)](_0x51a3df(0x20c))[_0x51a3df(0x25d)](_0x51a3df(0x237),_0x2f7149=>{const _0x1e33c3=_0x51a3df;photoInterval=parseFloat(_0x2f7149[_0x1e33c3(0x208)][_0x1e33c3(0x1f5)]),resetSimulation();}),document[_0x51a3df(0x24a)](_0x51a3df(0x1f8))[_0x51a3df(0x25d)]('click',()=>{const _0x23064a=_0x51a3df;time>=getTotalDuration()&&resetSimulation();if(time===0x0&&photos[_0x23064a(0x272)]===0x0){const _0x5dfe3a=calculateMotion(0x0);photos[_0x23064a(0x214)]({'x':_0x5dfe3a[_0x23064a(0x1f3)]*0x8,'velocity':_0x5dfe3a[_0x23064a(0x230)]});}running=!![],paused=![];}),document[_0x51a3df(0x24a)](_0x51a3df(0x29e))[_0x51a3df(0x25d)](_0x51a3df(0x2b2),()=>{paused=!paused;}),document[_0x51a3df(0x24a)](_0x51a3df(0x1d0))[_0x51a3df(0x25d)](_0x51a3df(0x2b2),resetSimulation);const saveOverlay=document[_0x51a3df(0x24a)](_0x51a3df(0x26c)),saveNote=document[_0x51a3df(0x24a)](_0x51a3df(0x20e));function setSaveNote(_0x267235,_0x1100dd){const _0x1579e3=_0x51a3df;saveNote[_0x1579e3(0x24c)]=_0x267235,saveNote[_0x1579e3(0x26f)]=_0x1579e3(0x1e4)+(_0x1100dd?_0x1579e3(0x2bd):_0x267235?_0x1579e3(0x2a1):'');}document[_0x51a3df(0x24a)](_0x51a3df(0x29b))['addEventListener'](_0x51a3df(0x2b2),()=>{const _0x1b9735=_0x51a3df;setSaveNote('',![]),saveOverlay[_0x1b9735(0x1f1)]=![];}),document[_0x51a3df(0x24a)](_0x51a3df(0x1fd))[_0x51a3df(0x25d)](_0x51a3df(0x2b2),()=>{const _0x45c5d0=_0x51a3df;saveOverlay[_0x45c5d0(0x1f1)]=!![];}),saveOverlay[_0x51a3df(0x25d)](_0x51a3df(0x2b2),_0x5ca5dc=>{const _0x42da2e=_0x51a3df;if(_0x5ca5dc[_0x42da2e(0x208)]===saveOverlay)saveOverlay[_0x42da2e(0x1f1)]=!![];}),document[_0x51a3df(0x25d)](_0x51a3df(0x279),_0x4140f4=>{const _0x15ff69=_0x51a3df;if(_0x4140f4[_0x15ff69(0x2a9)]===_0x15ff69(0x29f))saveOverlay[_0x15ff69(0x1f1)]=!![];}),document[_0x51a3df(0x24a)](_0x51a3df(0x236))[_0x51a3df(0x25d)](_0x51a3df(0x237),()=>{const _0x1ae08c=_0x51a3df;document[_0x1ae08c(0x24a)](_0x1ae08c(0x27f))[_0x1ae08c(0x1f1)]=document[_0x1ae08c(0x24a)](_0x1ae08c(0x236))[_0x1ae08c(0x1f5)]!==_0x1ae08c(0x1ee);}),document[_0x51a3df(0x24a)](_0x51a3df(0x224))[_0x51a3df(0x25d)](_0x51a3df(0x2b2),async()=>{const _0x307f1e=_0x51a3df,_0x4489e7=document['getElementById'](_0x307f1e(0x236))[_0x307f1e(0x1f5)],_0x34fa67=document[_0x307f1e(0x24a)](_0x307f1e(0x21c))[_0x307f1e(0x1f5)],_0x2ef804=document[_0x307f1e(0x24a)](_0x307f1e(0x1d4))[_0x307f1e(0x1f5)],_0x5aa3ec=document[_0x307f1e(0x24a)](_0x307f1e(0x220))[_0x307f1e(0x28b)];try{let _0x10c327;if(_0x2ef804===_0x307f1e(0x29d)){_0x10c327=await buildWordExport(_0x4489e7,_0x34fa67,_0x5aa3ec);if(_0x10c327)downloadBlob(_0x10c327['blob'],_0x10c327['name']);}else{_0x10c327=buildExport(_0x4489e7,_0x34fa67,_0x5aa3ec);if(_0x10c327)await downloadCanvas(_0x10c327[_0x307f1e(0x248)],_0x10c327[_0x307f1e(0x210)]);}if(!_0x10c327){setSaveNote(_0x307f1e(0x1de),!![]);return;}setSaveNote(_0x307f1e(0x2ab)+_0x10c327[_0x307f1e(0x210)]+'\x20('+_0x10c327[_0x307f1e(0x2b3)]+'\x20'+(_0x10c327[_0x307f1e(0x2b3)]===0x1?_0x307f1e(0x1cb):_0x307f1e(0x2ae))+')',![]);}catch(_0x19434e){setSaveNote(_0x307f1e(0x241),!![]);}}),requestAnimationFrame(animate);</script>
     <script>
         // تسجيل عامل الخدمة (يتيح التثبيت والعمل دون اتصال)
         if ('serviceWorker' in navigator) {
