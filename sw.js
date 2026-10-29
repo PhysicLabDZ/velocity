@@ -1,6 +1,6 @@
 // عامل الخدمة - velocity
 // عند كل تحديث للتطبيق: غيّر رقم الإصدار هنا ليصل التحديث إلى من ثبّت التطبيق
-const CACHE_VERSION = 'velocity-v5';
+const CACHE_VERSION = 'velocity-v6';
 
 const PRECACHE = [
   './',
@@ -33,13 +33,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// الشبكة أولاً (ليظهر آخر إصدار)، ثم الذاكرة عند انقطاع الاتصال
+// الشبكة أولاً مع تجاوز الذاكرة المؤقتة للمتصفح (cache: 'no-cache') ليصل آخر إصدار فوراً، ثم الذاكرة عند انقطاع الاتصال
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
